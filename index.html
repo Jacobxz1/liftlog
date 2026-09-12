@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lift Log</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lift Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{
+  --bg:#f4f4f1; --surface:#ffffff; --surface2:#ecebe6; --line:#dcdad3;
+  --text:#16171a; --muted:#6b6d72; --faint:#9a9ba0;
+  --accent:#e8541e; --accent-ink:#ffffff; --accent-soft:#fde6db;
+  --good:#1f8a4c; --good-soft:#dcf2e4; --danger:#c62f2f;
+  --radius:14px; --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1115; --surface:#181b21; --surface2:#20242c; --line:#2b3039;
+    --text:#f2f3f5; --muted:#9aa0aa; --faint:#6b717c;
+    --accent:#ff6a2b; --accent-ink:#ffffff; --accent-soft:#3a2219;
+    --good:#3ccf7a; --good-soft:#15301f; --danger:#ff5d5d;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%;overscroll-behavior-y:none}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{max-width:680px;margin:0 auto;min-height:100vh;
+  padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 96px) calc(env(safe-area-inset-left) + 16px)}
+/* Top bar */
+.top{display:flex;align-items:center;gap:8px;min-height:48px;margin-bottom:8px}
+.top h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0;flex:1;line-height:1.1}
+.top h1.sm{font-size:20px}
+.iconbtn{border:0;background:none;padding:8px 10px;border-radius:10px;color:var(--accent);font-weight:600;font-size:17px;min-height:44px}
+.iconbtn:active{background:var(--surface2)}
+.sub{color:var(--muted);font-size:14px}
+/* Cards & lists */
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:12px}
+.pad{padding:14px 16px}
+.section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 4px 8px}
+.row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--line);min-height:56px;width:100%;
+  background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.row:first-child{border-top:0}
+button.row:active{background:var(--surface2)}
+.row .grow{flex:1;min-width:0}
+.row .title{font-weight:650;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta{color:var(--muted);font-size:14px;margin-top:2px}
+.chev{color:var(--faint);font-size:20px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--surface2);color:var(--muted)}
+.pill.live{background:var(--accent-soft);color:var(--accent)}
+/* Buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border-radius:var(--radius);
+  border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:17px;padding:0 16px}
+.btn:active{filter:brightness(.92)}
+.btn.secondary{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+.btn.ghost{background:none;color:var(--accent)}
+.btn.danger{background:none;color:var(--danger);border:1px solid var(--line)}
+.btn.small{min-height:40px;font-size:15px;width:auto;padding:0 14px;border-radius:10px}
+.btns{display:grid;gap:10px;margin:12px 0}
+.btns.two{grid-template-columns:1fr 1fr}
+/* Banner */
+.banner{display:flex;align-items:center;gap:12px;background:var(--accent);color:var(--accent-ink);border-radius:var(--radius);
+  padding:14px 16px;margin-bottom:12px;border:0;width:100%;text-align:left}
+.banner .grow{flex:1}
+.banner b{font-size:17px;display:block}
+.banner.soft{background:var(--accent-soft);color:var(--text)}
+/* Forms */
+label.f{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 2px 6px;text-transform:uppercase;letter-spacing:.05em}
+.input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:17px;outline:none}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+textarea.input{resize:vertical;min-height:44px}
+/* Template editor exercise rows */
+.ex-edit{padding:12px 14px;border-top:1px solid var(--line)}
+.ex-edit:first-child{border-top:0}
+.ex-edit .line1{display:flex;gap:8px;align-items:center}
+.ex-edit .line2{display:grid;grid-template-columns:76px 1fr;gap:8px;margin-top:8px}
+.ex-edit .input{padding:10px 12px;font-size:16px}
+.ex-edit .mini{display:flex;flex-direction:column;gap:2px}
+.ex-edit .mini span{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;padding-left:2px}
+.tools{display:flex;gap:2px}
+.tool{border:0;background:var(--surface2);border-radius:8px;width:36px;height:36px;font-size:15px;color:var(--muted)}
+.tool:active{filter:brightness(.9)}
+.tool.x{color:var(--danger)}
+/* Live workout */
+.wk-head{position:sticky;top:0;z-index:5;background:var(--bg);margin:0 -16px;padding:calc(env(safe-area-inset-top) + 6px) 16px 8px;
+  border-bottom:1px solid var(--line)}
+.wk-head .top{margin:0}
+.wk-head .stats{display:flex;gap:14px;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.wk-head .stats b{color:var(--text)}
+.ex{padding:14px 14px 10px}
+.ex-name{display:flex;align-items:flex-start;gap:8px}
+.ex-name h3{margin:0;font-size:19px;font-weight:750;flex:1;letter-spacing:-.01em}
+.hint{color:var(--muted);font-size:13.5px;margin-top:3px}
+.last{font-size:13.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.last b{color:var(--text);font-weight:600}
+.sets{margin-top:10px}
+.set-h,.set{display:grid;grid-template-columns:34px 1fr 1fr 52px;gap:8px;align-items:center}
+.set-h{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;padding:0 2px 4px}
+.set-h span:nth-child(2),.set-h span:nth-child(3){text-align:center}
+.set{margin-bottom:8px}
+.set .n{font-weight:750;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;border:0;background:none;padding:0;height:48px}
+.set input{width:100%;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);text-align:center;
+  font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;outline:none;padding:0 4px}
+.set input::placeholder{color:var(--faint);font-weight:500}
+.set input:focus{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft)}
+.check{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:22px;color:var(--faint);font-weight:800}
+.set.done input{background:var(--good-soft);border-color:transparent}
+.set.done .check{background:var(--good);border-color:var(--good);color:#fff}
+.ex-actions{display:flex;gap:8px;margin-top:2px}
+.ex-actions button{flex:1;min-height:40px;border-radius:10px;border:1px dashed var(--line);background:none;color:var(--accent);font-weight:650;font-size:15px}
+.notes{margin-top:8px}
+.notes textarea{width:100%;border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:10px 12px;font-size:16px;min-height:42px;resize:vertical;outline:none}
+.notes textarea:focus{border-color:var(--accent);background:var(--surface)}
+/* History detail table */
+.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
+.tbl td{padding:4px 0;color:var(--muted)}
+.tbl td:first-child{width:56px}
+.tbl td b{color:var(--text)}
+/* Tab bar */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--surface) 92%,transparent);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+  display:flex;justify-content:center;padding:6px 8px calc(env(safe-area-inset-bottom) + 6px)}
+.tabs .in{display:flex;max-width:680px;width:100%}
+.tab{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--faint);font-size:11px;font-weight:650;min-height:50px}
+.tab svg{width:24px;height:24px}
+.tab.on{color:var(--accent)}
+/* Sheet / modal */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 16px);
+  max-height:88vh;overflow:auto;animation:up .2s ease-out}
+@media (min-width:700px){.scrim{align-items:center}.sheet{border-radius:18px}}
+.sheet h2{margin:0 0 6px;font-size:20px}
+.sheet p{margin:0 0 12px;color:var(--muted)}
+@keyframes fade{from{opacity:0}}
+.toast{animation:drop .2s ease-out}
+@keyframes drop{from{opacity:0;transform:translate(-50%,-10px)}}
+@keyframes up{from{transform:translateY(40px);opacity:.6}}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 12px);transform:translateX(-50%);background:var(--text);color:var(--bg);
+  padding:10px 18px;border-radius:16px;font-weight:650;font-size:15px;z-index:60;animation:fade .15s;max-width:90vw;text-align:center}
+.empty{text-align:center;color:var(--muted);padding:28px 16px}
+.empty b{display:block;color:var(--text);font-size:17px;margin-bottom:4px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.codebox{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+<nav id="tabs" class="tabs"></nav>
+<input type="file" id="filepick" accept=".json,application/json,text/plain" class="hidden">
+<script>
+"use strict";
+/* ============ Storage ============ */
+const KEY = "liftlog.v1";
+const UNIT = "lbs";
+let memoryFallback = null;
+function loadDB(){
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch(e) {}
+  if (raw == null && memoryFallback) raw = memoryFallback;
+  let d = null;
+  try { d = raw ? JSON.parse(raw) : null; } catch(e) { d = null; }
+  d = d || {};
+  d.templates = Array.isArray(d.templates) ? d.templates : [];
+  d.workouts = Array.isArray(d.workouts) ? d.workouts : [];
+  d.settings = d.settings || {};
+  return d;
+}
+let db = loadDB();
+let saveTimer = null;
+function saveNow(){
+  clearTimeout(saveTimer); saveTimer = null;
+  const s = JSON.stringify(db);
+  memoryFallback = s;
+  try { localStorage.setItem(KEY, s); } catch(e) { console.warn("save failed", e); }
+}
+function save(){ clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 250); }
+window.addEventListener("pagehide", saveNow);
+document.addEventListener("visibilitychange", () => { if (document.hidden) saveNow(); });
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch(e) {}
+
+/* ============ Utils ============ */
+const $ = (s, r=document) => r.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const norm = s => String(s || "").trim().toLowerCase();
+const num = v => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : null; };
+const fmtNum = n => n == null ? "" : (Math.round(n * 100) / 100).toString();
+function fmtDate(iso, opts){ const d = new Date(iso); return d.toLocaleDateString(undefined, opts || {weekday:"short", month:"short", day:"numeric"}); }
+function fmtDateLong(iso){ return fmtDate(iso, {weekday:"long", month:"long", day:"numeric", year:"numeric"}); }
+function fmtTime(iso){ return new Date(iso).toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"}); }
+function isoDay(iso){ const d = new Date(iso); const p = n => String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function fmtDur(ms){ if (!(ms > 0)) return "0:00"; const m = Math.floor(ms/60000), h = Math.floor(m/60); const s = Math.floor(ms/1000)%60;
+  return h ? `${h}:${String(m%60).padStart(2,"0")}:${String(s).padStart(2,"0")}` : `${m}:${String(s).padStart(2,"0")}`; }
+function daysAgo(iso){ const d = Math.floor((Date.now() - new Date(iso)) / 86400000); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; }
+
+/* ============ Domain helpers ============ */
+const groupKey = w => w.templateId ? "t:" + w.templateId : "n:" + norm(w.name);
+function sortedWorkouts(){ return db.workouts.slice().sort((a,b) => new Date(b.date) - new Date(a.date)); }
+/** Session number = position of this workout among all workouts of the same template/name, oldest first. */
+function sessionNumber(w){
+  const k = groupKey(w);
+  const same = db.workouts.filter(x => groupKey(x) === k).sort((a,b) => new Date(a.date) - new Date(b.date));
+  return same.findIndex(x => x.id === w.id) + 1;
+}
+function timesDone(tpl){ return db.workouts.filter(w => w.templateId === tpl.id && w.status === "done").length; }
+function lastDoneFor(tpl){ return sortedWorkouts().find(w => w.templateId === tpl.id); }
+function setDone(s){ return s.reps != null && s.reps !== ""; }
+function performedSets(ex){ return ex.sets.filter(setDone); }
+function totalSets(w){ return w.exercises.reduce((a, e) => a + performedSets(e).length, 0); }
+function volume(w){ return w.exercises.reduce((a, e) => a + performedSets(e).reduce((b, s) => b + (num(s.weight)||0) * (num(s.reps)||0), 0), 0); }
+function inProgress(){ return db.workouts.find(w => w.status === "in-progress"); }
+/** Most recent previous performance of an exercise (by name), excluding a given workout. */
+function previousFor(name, excludeId){
+  const n = norm(name); if (!n) return null;
+  for (const w of sortedWorkouts()){
+    if (w.id === excludeId) continue;
+    const ex = w.exercises.find(e => norm(e.name) === n);
+    if (ex && performedSets(ex).length) return { workout: w, ex };
+  }
+  return null;
+}
+function newWorkoutFromTemplate(tpl){
+  return {
+    id: uid(), templateId: tpl ? tpl.id : null, name: tpl ? tpl.name : "Workout",
+    date: new Date().toISOString(), finishedAt: null, status: "in-progress", notes: "",
+    exercises: tpl ? tpl.exercises.map(e => ({
+      id: uid(), name: e.name, target: e.target || "", hint: e.note || "", notes: "",
+      sets: Array.from({length: Math.max(1, e.sets || 3)}, () => ({weight: "", reps: ""}))
+    })) : []
+  };
+}
+
+/* ============ UI primitives ============ */
+function toast(msg){
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+/** Bottom sheet. buttons: [{label, cls, value}] → resolves value (or null on dismiss). */
+function sheet({title, text, html, buttons}){
+  return new Promise(resolve => {
+    const scrim = document.createElement("div"); scrim.className = "scrim";
+    scrim.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">
+      ${title ? `<h2>${esc(title)}</h2>` : ""}${text ? `<p>${esc(text)}</p>` : ""}${html || ""}
+      <div class="btns">${(buttons||[]).map((b,i) => `<button class="btn ${b.cls||""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div></div>`;
+    const close = v => { window.__sheetInputs = [...scrim.querySelectorAll("input,textarea")].map(i => i.value); scrim.remove(); resolve(v); };
+    scrim.addEventListener("click", e => {
+      if (e.target === scrim) return close(null);
+      const b = e.target.closest("[data-i]"); if (b) { const def = buttons[+b.dataset.i]; close(def.value !== undefined ? def.value : def.label); }
+    });
+    document.body.appendChild(scrim);
+    scrim._sheet = scrim.firstElementChild;
+    if (html) { const f = scrim.querySelector("input,textarea"); if (f) setTimeout(() => f.focus(), 60); }
+  });
+}
+const confirmSheet = (title, text, okLabel, danger) =>
+  sheet({title, text, buttons:[{label: okLabel || "OK", cls: danger ? "danger" : "", value: true}, {label:"Cancel", cls:"secondary", value:false}]});
+
+/* ============ Export / share ============ */
+async function shareOrDownload(filename, content, mime){
+  const blob = new Blob([content], {type: mime});
+  try {
+    const file = new File([blob], filename, {type: mime});
+    if (navigator.canShare && navigator.canShare({files:[file]}) && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      await navigator.share({files:[file], title: filename});
+      return true;
+    }
+  } catch(e) { if (e && e.name === "AbortError") return false; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast("File saved");
+  return true;
+}
+async function copyText(text, okMsg){
+  try { await navigator.clipboard.writeText(text); toast(okMsg || "Copied"); return true; }
+  catch(e) {
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch(_) {}
+    ta.remove(); toast(ok ? (okMsg || "Copied") : "Couldn't copy"); return ok;
+  }
+}
+function csvCell(v){ const s = String(v ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function workoutsToCSV(list){
+  const rows = [["Date","Start Time","Workout","Session #","Status","Exercise","Set","Weight (" + UNIT + ")","Reps","Exercise Notes","Workout Notes"]];
+  list.slice().sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(w => {
+    const n = sessionNumber(w);
+    w.exercises.forEach(ex => {
+      const sets = performedSets(ex);
+      if (!sets.length) rows.push([isoDay(w.date), fmtTime(w.date), w.name, n, w.status === "done" ? "Completed" : "In progress", ex.name, "", "", "", ex.notes, w.notes]);
+      sets.forEach((s, i) => rows.push([isoDay(w.date), fmtTime(w.date), w.name, n, w.status === "done" ? "Completed" : "In progress",
+        ex.name, i + 1, s.weight, s.reps, i === 0 ? ex.notes : "", i === 0 ? w.notes : ""]));
+    });
+  });
+  return "﻿" + rows.map(r => r.map(csvCell).join(",")).join("\r\n");
+}
+function workoutToText(w){
+  const lines = [`${w.name} — Session #${sessionNumber(w)}`, fmtDateLong(w.date)];
+  w.exercises.forEach(ex => {
+    const sets = performedSets(ex);
+    lines.push("", ex.name);
+    if (!sets.length) lines.push("  (no sets logged)");
+    sets.forEach((s, i) => lines.push(`  Set ${i+1}: ${s.weight !== "" && s.weight != null ? s.weight + " " + UNIT : "BW"} × ${s.reps}`));
+    if (ex.notes) lines.push("  Notes: " + ex.notes);
+  });
+  if (w.notes) lines.push("", "Workout notes: " + w.notes);
+  return lines.join("\n");
+}
+function safeName(s){ return String(s || "workout").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "workout"; }
+async function backupAll(){
+  const ok = await shareOrDownload(`LiftLog-backup-${isoDay(new Date())}.json`,
+    JSON.stringify({app:"liftlog", kind:"backup", version:1, exportedAt:new Date().toISOString(), templates:db.templates, workouts:db.workouts}, null, 1), "application/json");
+  if (ok) { db.settings.lastBackup = new Date().toISOString(); saveNow(); }
+  return ok;
+}
+
+/* ============ Template transfer (Mac → iPhone) ============ */
+function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(b){ return decodeURIComponent(escape(atob(b))); }
+function templateCode(tpls){
+  const payload = {app:"liftlog", kind:"templates", version:1, templates: tpls.map(t => ({id:t.id, name:t.name, exercises:t.exercises.map(e => ({name:e.name, sets:e.sets, target:e.target||"", note:e.note||""}))}))};
+  return "LIFTLOG1:" + b64encode(JSON.stringify(payload));
+}
+/** Accepts a LIFTLOG1: code, raw JSON (templates export or full backup). Returns {templates, workouts}. */
+function parseImport(text){
+  text = String(text || "").trim();
+  if (!text) throw new Error("Nothing to import.");
+  const m = text.match(/LIFTLOG1:([A-Za-z0-9+/=\s]+)/);
+  let obj;
+  if (m) obj = JSON.parse(b64decode(m[1].replace(/\s+/g, "")));
+  else obj = JSON.parse(text);
+  if (!obj || obj.app !== "liftlog") throw new Error("That doesn't look like a Lift Log file or code.");
+  const templates = (obj.templates || []).filter(t => t && t.name && Array.isArray(t.exercises)).map(t => ({
+    id: t.id || uid(), name: String(t.name), updated: new Date().toISOString(),
+    exercises: t.exercises.map(e => ({id: uid(), name: String(e.name || ""), sets: Math.max(1, Math.min(20, parseInt(e.sets) || 3)), target: String(e.target || ""), note: String(e.note || "")}))
+  }));
+  const workouts = obj.kind === "backup" ? (obj.workouts || []).filter(w => w && w.id && Array.isArray(w.exercises)) : [];
+  return {templates, workouts};
+}
+function applyImport({templates, workouts}){
+  let added = 0, updated = 0, wk = 0;
+  templates.forEach(t => {
+    const i = db.templates.findIndex(x => x.id === t.id);
+    if (i >= 0) { db.templates[i] = {...db.templates[i], ...t}; updated++; } else { db.templates.push(t); added++; }
+  });
+  workouts.forEach(w => { if (!db.workouts.some(x => x.id === w.id)) { db.workouts.push(w); wk++; } });
+  saveNow();
+  const parts = [];
+  if (added) parts.push(`${added} template${added>1?"s":""} added`);
+  if (updated) parts.push(`${updated} template${updated>1?"s":""} updated`);
+  if (wk) parts.push(`${wk} workout${wk>1?"s":""} restored`);
+  return parts.join(", ") || "Nothing new to import";
+}
+/** Quick-add parser: "Bench Press 4x8-10" / "Rows, 3 x 12" / "Plank" */
+function parseQuickLines(text){
+  return String(text || "").split(/\n+/).map(l => l.replace(/^[\s\-•*\d.)]+(?=[A-Za-z])/, "").trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(.*?)[\s,:–-]+(\d{1,2})\s*[x×]\s*([\d]+(?:\s*[-–]\s*\d+)?)\s*(?:reps?)?\s*$/i);
+    if (m) return {id: uid(), name: m[1].trim(), sets: parseInt(m[2]), target: m[3].replace(/\s+/g, "").replace("-", "–"), note: ""};
+    const m2 = l.match(/^(.*?)[\s,:–-]+(\d{1,2})\s*sets?\s*$/i);
+    if (m2) return {id: uid(), name: m2[1].trim(), sets: parseInt(m2[2]), target: "", note: ""};
+    return {id: uid(), name: l, sets: 3, target: "", note: ""};
+  });
+}
+</script>
+<script>
+/* ============ Router ============ */
+let view = {name: "home"};
+let tickTimer = null;
+const ICONS = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>',
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
+  templates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>'
+};
+const TABS = [["home","Workout"],["history","History"],["templates","Templates"],["more","Export"]];
+function go(v){ saveNow(); view = v; render(); window.scrollTo(0, 0); }
+function render(){
+  clearInterval(tickTimer); tickTimer = null;
+  const app = $("#app");
+  const fn = VIEWS[view.name] || VIEWS.home;
+  app.innerHTML = fn();
+  const tabView = {home:1, history:1, templates:1, more:1, detail:1}[view.name];
+  const activeTab = view.name === "detail" ? "history" : view.name;
+  const tabs = $("#tabs");
+  tabs.classList.toggle("hidden", !tabView);
+  tabs.innerHTML = `<div class="in">${TABS.map(([k, l]) => `<button class="tab ${activeTab === k ? "on" : ""}" data-go="${k}">${ICONS[k]}<span>${l}</span></button>`).join("")}</div>`;
+  if (AFTER[view.name]) AFTER[view.name]();
+}
+const VIEWS = {}, AFTER = {};
+
+/* ============ Home ============ */
+VIEWS.home = () => {
+  const live = inProgress();
+  const tpls = db.templates.slice().sort((a, b) => {
+    const la = lastDoneFor(a), lb = lastDoneFor(b);
+    return (lb ? +new Date(lb.date) : 0) - (la ? +new Date(la.date) : 0) || a.name.localeCompare(b.name);
+  });
+  const needBackup = db.workouts.some(w => w.status === "done") &&
+    (!db.settings.lastBackup || Date.now() - new Date(db.settings.lastBackup) > 14 * 86400000);
+  let h = `<div class="top"><h1>Workout</h1></div>`;
+  if (live) h += `<button class="banner" data-act="resume"><div class="grow"><b>Resume ${esc(live.name)}</b>
+      <span>Started ${fmtTime(live.date)} · ${totalSets(live)} set${totalSets(live) === 1 ? "" : "s"} logged</span></div><span style="font-size:22px">›</span></button>`;
+  if (needBackup) h += `<button class="banner soft" data-act="backup"><div class="grow"><b>Back up your workouts</b>
+      <span class="small muted">${db.settings.lastBackup ? "Last backup " + daysAgo(db.settings.lastBackup) : "No backup yet"} — tap to save a copy to Files</span></div></button>`;
+  if (!tpls.length) {
+    h += `<div class="card"><div class="empty"><b>No workout templates yet</b>Create one here, or build it on your Mac and bring it over.</div>
+      <div class="pad" style="padding-top:0"><div class="btns"><button class="btn" data-act="newtpl">Create a template</button>
+      <button class="btn secondary" data-act="import">Import from Mac</button></div></div></div>`;
+  } else {
+    h += `<div class="section-title">Start a workout</div><div class="card">` + tpls.map(t => {
+      const n = timesDone(t), last = lastDoneFor(t);
+      return `<button class="row" data-act="start" data-id="${t.id}"><div class="grow"><div class="title">${esc(t.name)}</div>
+        <div class="meta">${t.exercises.length} exercise${t.exercises.length === 1 ? "" : "s"} · ${n ? `Done ${n}×` : "Not done yet"}${last ? " · last " + fmtDate(last.date, {month:"short", day:"numeric"}) : ""}</div></div>
+        <span class="chev">›</span></button>`;
+    }).join("") + `</div>`;
+  }
+  h += `<div class="btns"><button class="btn ghost" data-act="empty">+ Start an empty workout</button></div>`;
+  const recent = sortedWorkouts().filter(w => w.status === "done").slice(0, 3);
+  if (recent.length) h += `<div class="section-title">Recent</div><div class="card">${recent.map(historyRow).join("")}</div>`;
+  return h;
+};
+
+async function startWorkout(tpl){
+  const live = inProgress();
+  if (live) {
+    const r = await sheet({title: "A workout is already in progress", text: `${live.name} was started ${fmtTime(live.date)}.`,
+      buttons: [{label: "Resume it", value: "resume"}, {label: "Finish it & start new", cls: "secondary", value: "finish"}, {label: "Cancel", cls: "ghost", value: null}]});
+    if (r === "resume") return go({name: "workout", id: live.id});
+    if (r !== "finish") return;
+    live.status = "done"; live.finishedAt = new Date().toISOString();
+  }
+  const w = newWorkoutFromTemplate(tpl);
+  db.workouts.push(w); saveNow();
+  go({name: "workout", id: w.id});
+}
+
+/* ============ History ============ */
+function historyRow(w){
+  const n = sessionNumber(w), sets = totalSets(w);
+  return `<button class="row" data-act="detail" data-id="${w.id}"><div class="grow">
+    <div class="title">${esc(w.name)} ${w.status !== "done" ? '<span class="pill live">In progress</span>' : ""}</div>
+    <div class="meta">${fmtDate(w.date)} · #${n} · ${w.exercises.length} exercise${w.exercises.length === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"}</div></div>
+    <span class="chev">›</span></button>`;
+}
+VIEWS.history = () => {
+  const list = sortedWorkouts();
+  let h = `<div class="top"><h1>History</h1>${list.length ? `<button class="iconbtn" data-act="exportall">Export</button>` : ""}</div>`;
+  if (!list.length) return h + `<div class="card"><div class="empty"><b>No workouts yet</b>Finished and in-progress workouts show up here.</div></div>`;
+  const byMonth = {};
+  list.forEach(w => { const k = new Date(w.date).toLocaleDateString(undefined, {month: "long", year: "numeric"}); (byMonth[k] = byMonth[k] || []).push(w); });
+  Object.entries(byMonth).forEach(([m, ws]) => { h += `<div class="section-title">${esc(m)}</div><div class="card">${ws.map(historyRow).join("")}</div>`; });
+  return h;
+};
+
+VIEWS.detail = () => {
+  const w = db.workouts.find(x => x.id === view.id);
+  if (!w) { view = {name: "history"}; return VIEWS.history(); }
+  const dur = w.finishedAt ? fmtDur(new Date(w.finishedAt) - new Date(w.date)) : null;
+  let h = `<div class="top"><button class="iconbtn" data-go="history">‹ History</button><div style="flex:1"></div>
+    <button class="iconbtn" data-act="editwk" data-id="${w.id}">${w.status === "done" ? "Edit" : "Resume"}</button></div>
+    <h1 style="font-size:26px;margin:0 0 4px;letter-spacing:-.02em">${esc(w.name)}</h1>
+    <div class="sub">${fmtDateLong(w.date)} · ${fmtTime(w.date)}</div>
+    <div class="sub" style="margin-bottom:14px">Session #${sessionNumber(w)} · ${totalSets(w)} sets${dur ? " · " + dur : ""}${volume(w) ? ` · ${Math.round(volume(w)).toLocaleString()} ${UNIT} volume` : ""}</div>`;
+  w.exercises.forEach(ex => {
+    const sets = performedSets(ex);
+    h += `<div class="card pad"><div style="font-weight:750;font-size:17px">${esc(ex.name)}</div>
+      ${sets.length ? `<table class="tbl" style="margin-top:6px">${sets.map((s, i) => `<tr><td>Set ${i + 1}</td><td><b>${s.weight !== "" && s.weight != null ? esc(s.weight) + " " + UNIT : "Bodyweight"}</b> × <b>${esc(s.reps)}</b></td></tr>`).join("")}</table>`
+        : `<div class="sub" style="margin-top:4px">No sets logged</div>`}
+      ${ex.notes ? `<div class="sub" style="margin-top:8px">📝 ${esc(ex.notes)}</div>` : ""}</div>`;
+  });
+  if (w.notes) h += `<div class="card pad"><div class="sub">Workout notes</div><div>${esc(w.notes)}</div></div>`;
+  h += `<div class="btns two"><button class="btn secondary" data-act="sharetext" data-id="${w.id}">Copy as text</button>
+    <button class="btn secondary" data-act="sharecsv" data-id="${w.id}">Export CSV</button></div>
+    <div class="btns"><button class="btn danger" data-act="delwk" data-id="${w.id}">Delete workout</button></div>`;
+  return h;
+};
+
+/* ============ Templates ============ */
+VIEWS.templates = () => {
+  let h = `<div class="top"><h1>Templates</h1><button class="iconbtn" data-act="newtpl">+ New</button></div>`;
+  if (!db.templates.length) h += `<div class="card"><div class="empty"><b>No templates yet</b>A template is a workout plan you reuse: its name and exercises.</div></div>`;
+  else h += `<div class="card">${db.templates.slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => `<button class="row" data-act="edittpl" data-id="${t.id}">
+      <div class="grow"><div class="title">${esc(t.name)}</div><div class="meta">${esc(t.exercises.map(e => e.name).filter(Boolean).join(" · ") || "No exercises")}</div></div><span class="chev">›</span></button>`).join("")}</div>`;
+  h += `<div class="section-title">Move templates between Mac and iPhone</div>
+    <div class="card pad"><div class="small muted" style="margin-bottom:10px">On the Mac: open a template and tap <b>Send to iPhone</b>. On the iPhone: tap <b>Import</b> below and paste, or pick the file.</div>
+    <div class="btns" style="margin:0"><button class="btn secondary" data-act="import">Import template</button></div></div>`;
+  return h;
+};
+
+let tplDraft = null;
+VIEWS.tpledit = () => {
+  const t = tplDraft;
+  const isNew = !db.templates.some(x => x.id === t.id);
+  let h = `<div class="top"><button class="iconbtn" data-act="tplcancel">Cancel</button><h1 class="sm" style="text-align:center">${isNew ? "New template" : "Edit template"}</h1>
+    <button class="iconbtn" data-act="tplsave" style="font-weight:800">Save</button></div>
+    <label class="f" for="tplname">Workout name</label>
+    <input id="tplname" class="input" placeholder="e.g. Push Day A" value="${esc(t.name)}" autocomplete="off" enterkeyhint="done">
+    <label class="f">Exercises</label><div class="card" id="exlist">`;
+  if (!t.exercises.length) h += `<div class="empty" style="padding:18px">No exercises yet — add them below.</div>`;
+  t.exercises.forEach((e, i) => {
+    h += `<div class="ex-edit" data-i="${i}"><div class="line1"><input class="input" data-f="name" placeholder="Exercise ${i + 1}" value="${esc(e.name)}" autocomplete="off" enterkeyhint="next">
+      <div class="tools"><button class="tool" data-act="exup" data-i="${i}" aria-label="Move up">↑</button><button class="tool" data-act="exdown" data-i="${i}" aria-label="Move down">↓</button>
+      <button class="tool x" data-act="exdel" data-i="${i}" aria-label="Remove">✕</button></div></div>
+      <div class="line2"><label class="mini"><span>Sets</span><input class="input" data-f="sets" inputmode="numeric" value="${esc(e.sets)}"></label>
+      <label class="mini"><span>Target reps (optional)</span><input class="input" data-f="target" placeholder="e.g. 8–10" value="${esc(e.target)}"></label></div>
+      <input class="input" data-f="note" placeholder="Cue or note (optional)" value="${esc(e.note)}" style="margin-top:8px"></div>`;
+  });
+  h += `</div><div class="btns two"><button class="btn secondary" data-act="exadd">+ Add exercise</button><button class="btn secondary" data-act="exbulk">Paste a list</button></div>`;
+  if (!isNew) h += `<div class="section-title">Other</div><div class="btns">
+      <button class="btn secondary" data-act="tplsend">Send to iPhone</button>
+      <button class="btn secondary" data-act="tplstart">Start this workout</button>
+      <button class="btn danger" data-act="tpldel">Delete template</button></div>`;
+  return h;
+};
+AFTER.tpledit = () => {
+  const list = $("#exlist");
+  $("#tplname").addEventListener("input", e => { tplDraft.name = e.target.value; });
+  list.addEventListener("input", e => {
+    const row = e.target.closest(".ex-edit"); if (!row) return;
+    const ex = tplDraft.exercises[+row.dataset.i], f = e.target.dataset.f;
+    if (f === "sets") ex.sets = e.target.value; else ex[f] = e.target.value;
+  });
+  list.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.dataset.f === "name") {
+      e.preventDefault();
+      const i = +e.target.closest(".ex-edit").dataset.i;
+      if (i === tplDraft.exercises.length - 1) addExercise(); else list.querySelectorAll('[data-f="name"]')[i + 1].focus();
+    }
+  });
+};
+function addExercise(){
+  const last = tplDraft.exercises[tplDraft.exercises.length - 1];
+  tplDraft.exercises.push({id: uid(), name: "", sets: last ? last.sets : 3, target: last ? last.target : "", note: ""});
+  render();
+  const names = document.querySelectorAll('#exlist [data-f="name"]'); names[names.length - 1].focus();
+}
+function cleanTemplate(t){
+  return {...t, name: t.name.trim() || "Untitled workout", updated: new Date().toISOString(),
+    exercises: t.exercises.filter(e => e.name.trim()).map(e => ({...e, name: e.name.trim(), sets: Math.max(1, Math.min(20, parseInt(e.sets) || 3)), target: String(e.target || "").trim(), note: String(e.note || "").trim()}))};
+}
+</script>
+<script>
+/* ============ Live workout logger ============ */
+const curW = () => db.workouts.find(x => x.id === view.id);
+function placeholdersFor(w, ex, i){
+  const prev = previousFor(ex.name, w.id);
+  const ps = prev ? performedSets(prev.ex) : [];
+  const p = ps[i] || ps[ps.length - 1];
+  let wt = p && p.weight !== "" && p.weight != null ? String(p.weight) : "";
+  let rp = p ? String(p.reps) : (ex.target || "");
+  if (!p) { for (let j = i - 1; j >= 0; j--) { const b = ex.sets[j]; if (b && b.weight !== "" && b.weight != null) { wt = String(b.weight); break; } } }
+  return {wt: wt || UNIT, rp: rp || "reps"};
+}
+function setRowHTML(w, ex, ei, s, i){
+  const ph = placeholdersFor(w, ex, i);
+  return `<div class="set ${setDone(s) ? "done" : ""}" data-ei="${ei}" data-si="${i}">
+    <button class="n" data-act="setmenu" data-ei="${ei}" data-si="${i}" aria-label="Set ${i + 1} options">${i + 1}</button>
+    <input data-f="weight" inputmode="decimal" enterkeyhint="next" placeholder="${esc(ph.wt)}" value="${esc(s.weight)}" aria-label="Set ${i + 1} weight">
+    <input data-f="reps" inputmode="numeric" enterkeyhint="done" placeholder="${esc(ph.rp)}" value="${esc(s.reps)}" aria-label="Set ${i + 1} reps">
+    <button class="check" data-act="check" data-ei="${ei}" data-si="${i}" aria-label="Log set ${i + 1}">✓</button></div>`;
+}
+function exerciseHTML(w, ex, ei){
+  const prev = previousFor(ex.name, w.id);
+  const lastLine = prev ? `<div class="last">Last · ${fmtDate(prev.workout.date, {month:"short", day:"numeric"})}: ${performedSets(prev.ex).map(s => `<b>${s.weight !== "" && s.weight != null ? esc(s.weight) : "BW"}×${esc(s.reps)}</b>`).join(" · ")}</div>` : "";
+  return `<div class="card ex" data-ei="${ei}">
+    <div class="ex-name"><h3>${esc(ex.name) || "Exercise"}</h3><button class="tool" data-act="exmenu" data-ei="${ei}" aria-label="Exercise options">•••</button></div>
+    ${ex.hint || ex.target ? `<div class="hint">${ex.target ? "Target " + esc(ex.target) + " reps" : ""}${ex.hint && ex.target ? " · " : ""}${esc(ex.hint)}</div>` : ""}
+    ${lastLine}
+    <div class="sets"><div class="set-h"><span>Set</span><span>${UNIT}</span><span>Reps</span><span></span></div>
+    ${ex.sets.map((s, i) => setRowHTML(w, ex, ei, s, i)).join("")}</div>
+    <div class="ex-actions"><button data-act="addset" data-ei="${ei}">+ Add set</button></div>
+    <div class="notes"><textarea data-f="exnotes" data-ei="${ei}" rows="1" placeholder="Notes (optional)">${esc(ex.notes)}</textarea></div></div>`;
+}
+VIEWS.workout = () => {
+  const w = curW();
+  if (!w) { view = {name: "home"}; return VIEWS.home(); }
+  const live = w.status !== "done";
+  let h = `<div class="wk-head"><div class="top">
+      <button class="iconbtn" data-act="${live ? "wkback" : "wkdone"}">‹ ${live ? "Home" : "Done"}</button>
+      <div style="flex:1"></div>
+      ${live ? `<button class="btn small" data-act="finish">Finish</button>` : `<button class="btn small" data-act="wkdone">Save</button>`}</div>
+    <h1 style="font-size:24px;margin:2px 0 2px;letter-spacing:-.02em" data-act="renamewk">${esc(w.name)}</h1>
+    <div class="stats"><span>${fmtDate(w.date)}</span><span>Session <b>#${sessionNumber(w)}</b></span>
+      ${live ? `<span>⏱ <b id="elapsed">${fmtDur(Date.now() - new Date(w.date))}</b></span>` : ""}<span><b id="setcount">${totalSets(w)}</b> sets</span></div></div>
+    <div style="height:12px"></div>`;
+  if (!w.exercises.length) h += `<div class="card"><div class="empty"><b>No exercises yet</b>Add your first exercise below.</div></div>`;
+  h += w.exercises.map((ex, ei) => exerciseHTML(w, ex, ei)).join("");
+  h += `<div class="btns"><button class="btn secondary" data-act="addex">+ Add exercise</button></div>
+    <label class="f">Workout notes</label>
+    <textarea class="input" data-f="wknotes" rows="2" placeholder="How did it feel? Anything to remember next time?">${esc(w.notes)}</textarea>
+    <div class="btns" style="margin-top:18px">${live ? `<button class="btn" data-act="finish">Finish workout</button>
+      <button class="btn danger" data-act="discard">Discard workout</button>` : `<button class="btn" data-act="wkdone">Save changes</button>`}</div>`;
+  return h;
+};
+AFTER.workout = () => {
+  const w = curW(); if (!w) return;
+  if (w.status !== "done") tickTimer = setInterval(() => { const el = $("#elapsed"); if (el) el.textContent = fmtDur(Date.now() - new Date(w.date)); }, 1000);
+  const app = $("#app");
+  app.oninput = e => {
+    const t = e.target, f = t.dataset.f; if (!f) return;
+    if (f === "wknotes") { w.notes = t.value; return save(); }
+    if (f === "exnotes") { w.exercises[+t.dataset.ei].notes = t.value; autoGrow(t); return save(); }
+    const row = t.closest(".set"); if (!row) return;
+    const ei = +row.dataset.ei, si = +row.dataset.si;
+    const val = t.value.replace(/[^\d.,]/g, "").replace(",", ".");
+    if (val !== t.value) t.value = val;
+    w.exercises[ei].sets[si][f] = val;
+    refreshExercise(ei); save();
+  };
+  app.onkeydown = e => {
+    if (e.key !== "Enter") return;
+    const t = e.target;
+    if (t.dataset.f === "weight") { e.preventDefault(); t.closest(".set").querySelector('[data-f="reps"]').focus(); }
+    else if (t.dataset.f === "reps") { e.preventDefault(); t.blur(); }
+  };
+  app.querySelectorAll("textarea[data-f=exnotes]").forEach(autoGrow);
+};
+function autoGrow(t){ t.style.height = "auto"; t.style.height = Math.min(160, t.scrollHeight + 2) + "px"; }
+/** Update done state + placeholders in one exercise card without re-rendering (keeps keyboard focus). */
+function refreshExercise(ei){
+  const w = curW(); const ex = w.exercises[ei];
+  const card = document.querySelector(`.ex[data-ei="${ei}"]`); if (!card) return;
+  card.querySelectorAll(".set").forEach(row => {
+    const si = +row.dataset.si, s = ex.sets[si]; if (!s) return;
+    row.classList.toggle("done", setDone(s));
+    const ph = placeholdersFor(w, ex, si);
+    row.querySelector('[data-f="weight"]').placeholder = ph.wt;
+    row.querySelector('[data-f="reps"]').placeholder = ph.rp;
+  });
+  const c = $("#setcount"); if (c) c.textContent = totalSets(w);
+}
+function logSet(ei, si){
+  const w = curW(), ex = w.exercises[ei], s = ex.sets[si];
+  const row = document.querySelector(`.set[data-ei="${ei}"][data-si="${si}"]`);
+  if (setDone(s)) {  // tap again = un-log (keep weight)
+    s.reps = ""; row.querySelector('[data-f="reps"]').value = ""; refreshExercise(ei); save(); return;
+  }
+  const ph = placeholdersFor(w, ex, si);
+  if ((s.weight === "" || s.weight == null) && num(ph.wt) != null) { s.weight = String(num(ph.wt)); row.querySelector('[data-f="weight"]').value = s.weight; }
+  if (/^\d+$/.test(ph.rp)) { s.reps = ph.rp; row.querySelector('[data-f="reps"]').value = s.reps; }
+  if (!setDone(s)) { row.querySelector('[data-f="reps"]').focus(); return; }
+  refreshExercise(ei); saveNow();
+}
+async function finishWorkout(){
+  const w = curW();
+  const empty = w.exercises.length === 0 || totalSets(w) === 0;
+  const ok = await confirmSheet("Finish workout?", empty ? "No sets have been logged yet. Save it anyway?" : `${totalSets(w)} sets logged. You can still edit it later from History.`, "Finish & save");
+  if (!ok) return;
+  w.status = "done"; w.finishedAt = new Date().toISOString(); saveNow();
+  go({name: "detail", id: w.id}); toast("Workout saved 💪");
+}
+async function promptText(title, value, placeholder, okLabel){
+  let v = value || "";
+  const r = await sheet({title, html: `<input class="input" id="promptin" value="${esc(v)}" placeholder="${esc(placeholder || "")}" autocomplete="off" enterkeyhint="done">`,
+    buttons: [{label: okLabel || "OK", value: "ok"}, {label: "Cancel", cls: "secondary", value: null}]});
+  return r === "ok" ? (window.__sheetInputs[0] || "").trim() : null;
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.id === "promptin") { e.preventDefault(); const b = e.target.closest(".sheet").querySelector("[data-i='0']"); b && b.click(); }
+}, true);
+</script>
+<script>
+/* ============ Export tab ============ */
+VIEWS.more = () => {
+  const done = db.workouts.filter(w => w.status === "done").length;
+  const standalone = window.navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  return `<div class="top"><h1>Export</h1></div>
+  <div class="section-title">Your workouts</div>
+  <div class="card">
+    <button class="row" data-act="exportall"><div class="grow"><div class="title">Export all workouts</div><div class="meta">Spreadsheet (CSV) — opens in Numbers or Excel</div></div><span class="chev">›</span></button>
+    <button class="row" data-act="backup"><div class="grow"><div class="title">Back up everything</div><div class="meta">${db.settings.lastBackup ? "Last backup " + daysAgo(db.settings.lastBackup) : "No backup yet"} · save to Files, iCloud Drive or OneDrive</div></div><span class="chev">›</span></button>
+    <button class="row" data-act="restore"><div class="grow"><div class="title">Restore from a backup</div><div class="meta">Adds anything missing from a backup file</div></div><span class="chev">›</span></button>
+  </div>
+  <div class="section-title">Templates</div>
+  <div class="card">
+    <button class="row" data-act="sendall"><div class="grow"><div class="title">Send all templates to iPhone</div><div class="meta">Copy a code or save a file</div></div><span class="chev">›</span></button>
+    <button class="row" data-act="import"><div class="grow"><div class="title">Import templates</div><div class="meta">Paste a code or choose a file</div></div><span class="chev">›</span></button>
+  </div>
+  <div class="section-title">About</div>
+  <div class="card pad small muted">
+    ${db.templates.length} template${db.templates.length === 1 ? "" : "s"} · ${done} completed workout${done === 1 ? "" : "s"} · weights in ${UNIT}<br>
+    Everything is stored on this device only${standalone ? "" : ". Tip: on iPhone, use Share › Add to Home Screen and always open Lift Log from its icon — Safari and the Home Screen app keep separate data"}.
+    Back up now and then so a lost phone doesn't mean lost workouts.
+  </div>`;
+};
+
+/* ============ Import / send sheets ============ */
+function importSheet(){
+  const scrim = document.createElement("div"); scrim.className = "scrim";
+  scrim.innerHTML = `<div class="sheet"><h2>Import templates</h2>
+    <p>Paste the code you copied on your Mac, or choose a Lift Log file you AirDropped or saved to Files.</p>
+    <textarea class="input codebox" id="importtext" rows="4" placeholder="Paste code here (starts with LIFTLOG1:)"></textarea>
+    <div class="btns two"><button class="btn secondary" data-x="paste">Paste</button><button class="btn secondary" data-x="file">Choose file</button></div>
+    <div class="btns"><button class="btn" data-x="go">Import</button><button class="btn ghost" data-x="cancel">Cancel</button></div></div>`;
+  document.body.appendChild(scrim);
+  const ta = scrim.querySelector("#importtext");
+  const close = () => scrim.remove();
+  const run = text => {
+    try { const res = parseImport(text); if (!res.templates.length && !res.workouts.length) throw new Error("No templates found in that code.");
+      const msg = applyImport(res); close(); toast(msg); render(); }
+    catch(err) { toast(err.message && err.message.length < 80 ? err.message : "That code couldn't be read — copy it again and retry."); }
+  };
+  scrim.addEventListener("click", async e => {
+    if (e.target === scrim) return close();
+    const x = e.target.closest("[data-x]"); if (!x) return;
+    const k = x.dataset.x;
+    if (k === "cancel") close();
+    else if (k === "go") run(ta.value);
+    else if (k === "file") pickFile(text => run(text));
+    else if (k === "paste") {
+      try { const t = await navigator.clipboard.readText(); ta.value = t; if (/LIFTLOG1:|"app"\s*:\s*"liftlog"/.test(t)) run(t); }
+      catch(_) { ta.focus(); toast("Tap the box, then choose Paste"); }
+    }
+  });
+}
+function pickFile(cb){
+  const fp = $("#filepick"); fp.value = "";
+  fp.onchange = () => { const f = fp.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => cb(String(r.result)); r.readAsText(f); };
+  fp.click();
+}
+async function sendTemplates(tpls){
+  if (!tpls.length) return toast("No templates to send");
+  const code = templateCode(tpls);
+  const label = tpls.length === 1 ? tpls[0].name : "templates";
+  const r = await sheet({title: `Send ${tpls.length === 1 ? "“" + tpls[0].name + "”" : "all templates"} to iPhone`,
+    html: `<p><b>Copy code</b> — then on your iPhone open Lift Log › Templates › Import › Paste. (Works when your Mac and iPhone share an Apple ID with Handoff on.)</p>
+      <p><b>Save file</b> — AirDrop it or save to iCloud Drive, then choose it from Import › Choose file.</p>`,
+    buttons: [{label: "Copy code", value: "copy"}, {label: "Save file", cls: "secondary", value: "file"}, {label: "Cancel", cls: "ghost", value: null}]});
+  if (r === "copy") copyText(code, "Code copied — paste it on your iPhone");
+  if (r === "file") shareOrDownload(`LiftLog-${safeName(label)}.json`, JSON.stringify(JSON.parse(b64decode(code.slice(9))), null, 1), "application/json");
+}
+
+/* ============ Actions ============ */
+const ACTIONS = {
+  resume: () => { const w = inProgress(); if (w) go({name: "workout", id: w.id}); },
+  backup: () => backupAll().then(() => render()),
+  start: el => startWorkout(db.templates.find(t => t.id === el.dataset.id)),
+  empty: () => startWorkout(null),
+  newtpl: () => { tplDraft = {id: uid(), name: "", exercises: [{id: uid(), name: "", sets: 3, target: "", note: ""}]}; go({name: "tpledit"}); $("#tplname").focus(); },
+  edittpl: el => { tplDraft = clone(db.templates.find(t => t.id === el.dataset.id)); go({name: "tpledit"}); },
+  tplcancel: () => go({name: "templates"}),
+  tplsave: () => {
+    const t = cleanTemplate(tplDraft);
+    if (!t.exercises.length) return toast("Add at least one exercise");
+    const i = db.templates.findIndex(x => x.id === t.id);
+    if (i >= 0) db.templates[i] = t; else db.templates.push(t);
+    saveNow(); go({name: "templates"}); toast("Template saved");
+  },
+  exadd: () => addExercise(),
+  exdel: el => { tplDraft.exercises.splice(+el.dataset.i, 1); render(); },
+  exup: el => { const i = +el.dataset.i, a = tplDraft.exercises; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; render(); } },
+  exdown: el => { const i = +el.dataset.i, a = tplDraft.exercises; if (i < a.length - 1) { [a[i + 1], a[i]] = [a[i], a[i + 1]]; render(); } },
+  exbulk: async () => {
+    const r = await sheet({title: "Paste a list of exercises", text: "One per line. Add sets × reps if you like, e.g. “Bench Press 4x8-10”.",
+      html: `<textarea class="input" rows="7" placeholder="Bench Press 4x8-10&#10;Incline DB Press 3x10&#10;Cable Fly 3x12-15&#10;Lateral Raise 4x15"></textarea>`,
+      buttons: [{label: "Add exercises", value: "ok"}, {label: "Cancel", cls: "secondary", value: null}]});
+    if (r !== "ok") return;
+    const items = parseQuickLines(window.__sheetInputs[0]);
+    tplDraft.exercises = tplDraft.exercises.filter(e => e.name.trim()).concat(items); render();
+  },
+  tplsend: () => sendTemplates([cleanTemplate(tplDraft)]),
+  tplstart: () => { const t = db.templates.find(x => x.id === tplDraft.id); if (t) startWorkout(t); },
+  tpldel: async () => {
+    if (!await confirmSheet("Delete this template?", "Past workouts made from it stay in your history.", "Delete template", true)) return;
+    db.templates = db.templates.filter(t => t.id !== tplDraft.id); saveNow(); go({name: "templates"});
+  },
+  import: () => importSheet(),
+  sendall: () => sendTemplates(db.templates),
+  exportall: () => db.workouts.length ? shareOrDownload(`LiftLog-workouts-${isoDay(new Date())}.csv`, workoutsToCSV(db.workouts), "text/csv") : toast("No workouts yet"),
+  restore: () => pickFile(text => { try { const res = parseImport(text); toast(applyImport(res)); render(); } catch(e) { toast(e.message || "Couldn't read that file"); } }),
+  detail: el => go({name: "detail", id: el.dataset.id}),
+  editwk: el => go({name: "workout", id: el.dataset.id}),
+  sharetext: el => copyText(workoutToText(db.workouts.find(w => w.id === el.dataset.id)), "Copied — paste into Notes or Messages"),
+  sharecsv: el => { const w = db.workouts.find(x => x.id === el.dataset.id); shareOrDownload(`LiftLog-${isoDay(w.date)}-${safeName(w.name)}.csv`, workoutsToCSV([w]), "text/csv"); },
+  delwk: async el => {
+    if (!await confirmSheet("Delete this workout?", "This can't be undone.", "Delete workout", true)) return;
+    db.workouts = db.workouts.filter(w => w.id !== el.dataset.id); saveNow(); go({name: "history"});
+  },
+  // live workout
+  wkback: () => go({name: "home"}),
+  wkdone: () => { const w = curW(); go({name: "detail", id: w.id}); toast("Changes saved"); },
+  finish: () => finishWorkout(),
+  discard: async () => {
+    if (!await confirmSheet("Discard this workout?", "Everything logged in this session will be deleted.", "Discard", true)) return;
+    db.workouts = db.workouts.filter(w => w.id !== view.id); saveNow(); go({name: "home"});
+  },
+  check: el => logSet(+el.dataset.ei, +el.dataset.si),
+  addset: el => {
+    const w = curW(), ex = w.exercises[+el.dataset.ei];
+    const last = ex.sets[ex.sets.length - 1];
+    ex.sets.push({weight: last && last.weight !== "" ? last.weight : "", reps: ""}); saveNow(); render();
+  },
+  setmenu: async el => {
+    const w = curW(), ei = +el.dataset.ei, si = +el.dataset.si, ex = w.exercises[ei];
+    const r = await sheet({title: `${ex.name} · Set ${si + 1}`, buttons: [{label: "Remove this set", cls: "danger", value: "del"}, {label: "Cancel", cls: "secondary", value: null}]});
+    if (r === "del") { ex.sets.splice(si, 1); if (!ex.sets.length) ex.sets.push({weight: "", reps: ""}); saveNow(); render(); }
+  },
+  exmenu: async el => {
+    const w = curW(), ei = +el.dataset.ei, ex = w.exercises[ei];
+    const r = await sheet({title: ex.name || "Exercise", buttons: [
+      {label: "Rename", cls: "secondary", value: "rename"}, ...(ei > 0 ? [{label: "Move up", cls: "secondary", value: "up"}] : []),
+      ...(ei < w.exercises.length - 1 ? [{label: "Move down", cls: "secondary", value: "down"}] : []),
+      {label: "Remove exercise", cls: "danger", value: "del"}, {label: "Cancel", cls: "ghost", value: null}]});
+    const a = w.exercises;
+    if (r === "rename") { const n = await promptText("Rename exercise", ex.name, "Exercise name", "Rename"); if (n) ex.name = n; }
+    else if (r === "up") [a[ei - 1], a[ei]] = [a[ei], a[ei - 1]];
+    else if (r === "down") [a[ei + 1], a[ei]] = [a[ei], a[ei + 1]];
+    else if (r === "del") { if (!await confirmSheet(`Remove ${ex.name}?`, "Its logged sets in this workout will be deleted.", "Remove", true)) return; a.splice(ei, 1); }
+    else return;
+    saveNow(); render();
+  },
+  addex: async () => {
+    const n = await promptText("Add exercise", "", "e.g. Dips", "Add"); if (!n) return;
+    const w = curW(); w.exercises.push({id: uid(), name: n, target: "", hint: "", notes: "", sets: [{weight: "", reps: ""}, {weight: "", reps: ""}, {weight: "", reps: ""}]});
+    saveNow(); render();
+    const cards = document.querySelectorAll(".ex"); cards[cards.length - 1].scrollIntoView({behavior: "smooth", block: "center"});
+  },
+  renamewk: async () => { const w = curW(); const n = await promptText("Workout name", w.name, "Workout name", "Save"); if (n) { w.name = n; saveNow(); render(); } }
+};
+document.addEventListener("click", e => {
+  if (e.target.closest(".scrim")) return;
+  const g = e.target.closest("[data-go]");
+  if (g) { go({name: g.dataset.go}); return; }
+  const a = e.target.closest("[data-act]");
+  if (a && ACTIONS[a.dataset.act]) ACTIONS[a.dataset.act](a);
+});
+
+/* ============ Boot ============ */
+{ const live = inProgress(); if (live && Date.now() - new Date(live.date) < 6 * 3600000) view = {name: "workout", id: live.id}; }
+render();
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
