@@ -1,7 +1,7 @@
 /* Lift Log service worker — makes the app open instantly and work with no signal.
    Serves the saved copy first, then quietly checks for a newer version in the background.
    To publish an update: upload the new files and bump VERSION below. */
-const VERSION = "liftlog-v1";
+const VERSION = "liftlog-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

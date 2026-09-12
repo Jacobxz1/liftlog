@@ -106,6 +106,17 @@ textarea.input{resize:vertical;min-height:44px}
 .hint{color:var(--muted);font-size:13.5px;margin-top:3px}
 .last{font-size:13.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
 .last b{color:var(--text);font-weight:600}
+button.last{display:flex;width:100%;gap:6px;align-items:baseline;text-align:left;background:none;border:0;padding:4px 0 0;font:inherit;font-size:13.5px;color:var(--muted)}
+button.last .grow{flex:1}
+button.last .more{color:var(--accent);font-weight:700;font-size:13px}
+.hitem{border-top:1px solid var(--line);padding:10px 0}
+.hitem:first-child{border-top:0}
+.hdate{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.hsets{font-variant-numeric:tabular-nums;margin-top:3px}
+.hnote{color:var(--muted);font-size:14px;margin-top:3px}
+.hex{padding:10px 0;border-top:1px solid var(--line)}
+.hex:first-child{border-top:0}
+.hex .n{font-weight:700}
 .sets{margin-top:10px}
 .set-h,.set{display:grid;grid-template-columns:34px 1fr 1fr 52px;gap:8px;align-items:center}
 .set-h{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;padding:0 2px 4px}
@@ -236,6 +247,24 @@ function previousFor(name, excludeId){
   }
   return null;
 }
+/** Two workouts are the same "day" when they share a template, or (across routines) a name. */
+function sameDay(a, b){ return (a.templateId && a.templateId === b.templateId) || norm(a.name) === norm(b.name); }
+/** The most recent earlier session of this workout day — across routines, so a new block still shows the last one. */
+function previousSession(w){
+  return sortedWorkouts().find(x => x.id !== w.id && sameDay(x, w) && new Date(x.date) <= new Date(w.date) && totalSets(x) > 0) || null;
+}
+/** The last few times an exercise was performed, most recent first. */
+function historyOfExercise(name, excludeId, limit){
+  const n = norm(name), out = [];
+  if (!n) return out;
+  for (const w of sortedWorkouts()){
+    if (w.id === excludeId) continue;
+    const ex = w.exercises.find(e => norm(e.name) === n);
+    if (ex && performedSets(ex).length) { out.push({workout: w, ex}); if (out.length >= (limit || 4)) break; }
+  }
+  return out;
+}
+function setsLine(ex){ return performedSets(ex).map(s => `<b>${s.weight !== "" && s.weight != null ? esc(s.weight) : "BW"}×${esc(s.reps)}</b>`).join(" · "); }
 function newWorkoutFromTemplate(tpl){
   return {
     id: uid(), templateId: tpl ? tpl.id : null, name: tpl ? tpl.name : "Workout",
@@ -701,7 +730,7 @@ function setRowHTML(w, ex, ei, s, i){
 }
 function exerciseHTML(w, ex, ei){
   const prev = previousFor(ex.name, w.id);
-  const lastLine = prev ? `<div class="last">Last · ${fmtDate(prev.workout.date, {month:"short", day:"numeric"})}: ${performedSets(prev.ex).map(s => `<b>${s.weight !== "" && s.weight != null ? esc(s.weight) : "BW"}×${esc(s.reps)}</b>`).join(" · ")}</div>` : "";
+  const lastLine = prev ? `<button class="last" data-act="exlast" data-ei="${ei}"><span class="grow">Last · ${fmtDate(prev.workout.date, {month:"short", day:"numeric"})}: ${setsLine(prev.ex)}${prev.ex.notes ? " · 📝" : ""}</span><span class="more">History ›</span></button>` : "";
   return `<div class="card ex" data-ei="${ei}">
     <div class="ex-name"><h3>${esc(ex.name) || "Exercise"}</h3><button class="tool" data-act="exmenu" data-ei="${ei}" aria-label="Exercise options">•••</button></div>
     ${ex.hint || ex.target ? `<div class="hint">${ex.target ? "Target " + esc(ex.target) + " reps" : ""}${ex.hint && ex.target ? " · " : ""}${esc(ex.hint)}</div>` : ""}
@@ -718,6 +747,7 @@ VIEWS.workout = () => {
   let h = `<div class="wk-head"><div class="top">
       <button class="iconbtn" data-act="${live ? "wkback" : "wkdone"}">‹ ${live ? "Home" : "Done"}</button>
       <div style="flex:1"></div>
+      ${previousSession(w) ? `<button class="btn small secondary" data-act="lastsession" style="margin-right:8px">Last time</button>` : ""}
       ${live ? `<button class="btn small" data-act="finish">Finish</button>` : `<button class="btn small" data-act="wkdone">Save</button>`}</div>
     <h1 style="font-size:24px;margin:2px 0 2px;letter-spacing:-.02em" data-act="renamewk">${esc(w.name)}</h1>
     <div class="stats">${w.routineId && routineName(w.routineId) ? `<span>${esc(routineName(w.routineId))}</span>` : ""}<span>${fmtDate(w.date)}</span><span>Session <b>#${sessionNumber(w)}</b></span>
@@ -780,6 +810,31 @@ function logSet(ei, si){
   if (/^\d+$/.test(ph.rp)) { s.reps = ph.rp; row.querySelector('[data-f="reps"]').value = s.reps; }
   if (!setDone(s)) { row.querySelector('[data-f="reps"]').focus(); return; }
   refreshExercise(ei); saveNow();
+}
+
+/** Full read-out of the previous session of this workout day. */
+async function showLastSession(){
+  const w = curW(), p = previousSession(w);
+  if (!p) return toast("No earlier session of this workout yet");
+  const rn = routineName(p.routineId);
+  const body = p.exercises.filter(ex => performedSets(ex).length).map(ex =>
+    `<div class="hex"><div class="n">${esc(ex.name)}</div><div class="hsets">${setsLine(ex)}</div>${ex.notes ? `<div class="hnote">📝 ${esc(ex.notes)}</div>` : ""}</div>`).join("");
+  await sheet({title: `Last time · ${fmtDate(p.date, {weekday:"long", month:"long", day:"numeric"})}`,
+    html: `<p class="small muted">${rn ? esc(rn) + " · " : ""}Session #${sessionNumber(p)} · ${totalSets(p)} sets${p.finishedAt ? " · " + fmtDur(new Date(p.finishedAt) - new Date(p.date)) : ""}</p>
+      <div class="card pad">${body || "<span class='muted'>No sets were logged.</span>"}</div>
+      ${p.notes ? `<div class="card pad"><div class="hdate">Workout notes</div><div>${esc(p.notes)}</div></div>` : ""}`,
+    buttons: [{label: "Close", cls: "secondary", value: null}]});
+}
+/** The last few sessions of one exercise. */
+async function showExerciseHistory(ei){
+  const w = curW(), ex = w.exercises[ei];
+  const hist = historyOfExercise(ex.name, w.id, 5);
+  if (!hist.length) return toast(`No earlier sessions of ${ex.name}`);
+  await sheet({title: ex.name,
+    html: `<div class="card pad">${hist.map(({workout, ex: e}) => `<div class="hitem">
+      <div class="hdate">${fmtDate(workout.date, {weekday:"short", month:"short", day:"numeric"})}${routineName(workout.routineId) ? " · " + esc(routineName(workout.routineId)) : ""}</div>
+      <div class="hsets">${setsLine(e)}</div>${e.notes ? `<div class="hnote">📝 ${esc(e.notes)}</div>` : ""}</div>`).join("")}</div>`,
+    buttons: [{label: "Close", cls: "secondary", value: null}]});
 }
 async function finishWorkout(){
   const w = curW();
@@ -1007,6 +1062,8 @@ const ACTIONS = {
     db.workouts = db.workouts.filter(w => w.id !== view.id); saveNow(); go({name: "home"});
   },
   check: el => logSet(+el.dataset.ei, +el.dataset.si),
+  lastsession: () => showLastSession(),
+  exlast: el => showExerciseHistory(+el.dataset.ei),
   addset: el => {
     const w = curW(), ex = w.exercises[+el.dataset.ei];
     const last = ex.sets[ex.sets.length - 1];
