@@ -93,6 +93,7 @@ textarea.input{resize:vertical;min-height:44px}
 .tool{border:0;background:var(--surface2);border-radius:8px;width:36px;height:36px;font-size:15px;color:var(--muted)}
 .tool:active{filter:brightness(.9)}
 .tool.x{color:var(--danger)}
+.tool:disabled{opacity:.3}
 /* Live workout */
 .wk-head{position:sticky;top:0;z-index:5;background:var(--bg);margin:0 -16px;padding:calc(env(safe-area-inset-top) + 6px) 16px 8px;
   border-bottom:1px solid var(--line)}
@@ -144,11 +145,11 @@ textarea.input{resize:vertical;min-height:44px}
 .sheet h2{margin:0 0 6px;font-size:20px}
 .sheet p{margin:0 0 12px;color:var(--muted)}
 @keyframes fade{from{opacity:0}}
-.toast{animation:drop .2s ease-out}
-@keyframes drop{from{opacity:0;transform:translate(-50%,-10px)}}
+.toast{animation:drop .2s ease-out;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+@keyframes drop{from{opacity:0;transform:translate(-50%,10px)}}
 @keyframes up{from{transform:translateY(40px);opacity:.6}}
-.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 12px);transform:translateX(-50%);background:var(--text);color:var(--bg);
-  padding:10px 18px;border-radius:16px;font-weight:650;font-size:15px;z-index:60;animation:fade .15s;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 84px);transform:translateX(-50%);background:var(--text);color:var(--bg);
+  padding:10px 18px;border-radius:16px;font-weight:650;font-size:15px;z-index:45;animation:fade .15s;max-width:90vw;text-align:center}
 .empty{text-align:center;color:var(--muted);padding:28px 16px}
 .empty b{display:block;color:var(--text);font-size:17px;margin-bottom:4px}
 .muted{color:var(--muted)}
@@ -174,6 +175,7 @@ function loadDB(){
   let d = null;
   try { d = raw ? JSON.parse(raw) : null; } catch(e) { d = null; }
   d = d || {};
+  d.routines = Array.isArray(d.routines) ? d.routines : [];
   d.templates = Array.isArray(d.templates) ? d.templates : [];
   d.workouts = Array.isArray(d.workouts) ? d.workouts : [];
   d.settings = d.settings || {};
@@ -211,10 +213,10 @@ function daysAgo(iso){ const d = Math.floor((Date.now() - new Date(iso)) / 86400
 /* ============ Domain helpers ============ */
 const groupKey = w => w.templateId ? "t:" + w.templateId : "n:" + norm(w.name);
 function sortedWorkouts(){ return db.workouts.slice().sort((a,b) => new Date(b.date) - new Date(a.date)); }
-/** Session number = position of this workout among all workouts of the same template/name, oldest first. */
+/** Session number = position of this workout among workouts of the same day WITHIN its routine, oldest first. */
 function sessionNumber(w){
   const k = groupKey(w);
-  const same = db.workouts.filter(x => groupKey(x) === k).sort((a,b) => new Date(a.date) - new Date(b.date));
+  const same = db.workouts.filter(x => groupKey(x) === k && x.routineId === w.routineId).sort((a,b) => new Date(a.date) - new Date(b.date));
   return same.findIndex(x => x.id === w.id) + 1;
 }
 function timesDone(tpl){ return db.workouts.filter(w => w.templateId === tpl.id && w.status === "done").length; }
@@ -237,6 +239,7 @@ function previousFor(name, excludeId){
 function newWorkoutFromTemplate(tpl){
   return {
     id: uid(), templateId: tpl ? tpl.id : null, name: tpl ? tpl.name : "Workout",
+    routineId: tpl ? tpl.routineId : (currentRoutine() || {}).id || null,
     date: new Date().toISOString(), finishedAt: null, status: "in-progress", notes: "",
     exercises: tpl ? tpl.exercises.map(e => ({
       id: uid(), name: e.name, target: e.target || "", hint: e.note || "", notes: "",
@@ -244,6 +247,49 @@ function newWorkoutFromTemplate(tpl){
     })) : []
   };
 }
+
+/* ============ Routines ============ */
+/** A routine is a training block (8–12 weeks). Workout days live inside one routine,
+    and a day's session count restarts when a new routine starts. */
+function currentRoutine(){ return db.routines.find(r => r.id === db.settings.currentRoutineId) || db.routines[db.routines.length - 1] || null; }
+function routineById(id){ return db.routines.find(r => r.id === id) || null; }
+function routineName(id){ const r = routineById(id); return r ? r.name : ""; }
+function daysOf(routineId){
+  return db.templates.filter(t => t.routineId === routineId)
+    .sort((a, b) => (a.order == null ? 999 : a.order) - (b.order == null ? 999 : b.order) || a.name.localeCompare(b.name));
+}
+function weekOf(r){ if (!r) return 1; return Math.max(1, Math.floor((Date.now() - new Date(r.created)) / (7 * 86400000)) + 1); }
+function otherRoutines(){ const c = currentRoutine(); return db.routines.filter(r => !c || r.id !== c.id).sort((a, b) => new Date(b.created) - new Date(a.created)); }
+function newRoutine(name, copyFrom){
+  const r = {id: uid(), name: String(name || "").trim() || "New routine", created: new Date().toISOString()};
+  db.routines.push(r);
+  if (copyFrom) daysOf(copyFrom).forEach((t, i) => db.templates.push({
+    ...clone(t), id: uid(), routineId: r.id, order: i, updated: new Date().toISOString(),
+    exercises: t.exercises.map(e => ({...e, id: uid()}))
+  }));
+  db.settings.currentRoutineId = r.id; saveNow();
+  return r;
+}
+/** Older saves had no routines: put everything into one so nothing is orphaned. */
+function migrate(){
+  let changed = false;
+  if (!db.routines.length && (db.templates.length || db.workouts.length)) {
+    const first = db.workouts.slice().sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+    const r = {id: uid(), name: "My first routine", created: first ? first.date : new Date().toISOString()};
+    db.routines.push(r); db.settings.currentRoutineId = r.id; changed = true;
+  }
+  const cur = db.settings.currentRoutineId || (db.routines[db.routines.length - 1] || {}).id || null;
+  if (cur && db.settings.currentRoutineId !== cur) { db.settings.currentRoutineId = cur; changed = true; }
+  db.templates.forEach((t, i) => {
+    if (!t.routineId) { t.routineId = cur; changed = true; }
+    if (t.order == null) { t.order = i; changed = true; }
+  });
+  db.workouts.forEach(w => {
+    if (!w.routineId) { const t = db.templates.find(x => x.id === w.templateId); w.routineId = t ? t.routineId : cur; changed = true; }
+  });
+  if (changed) saveNow();
+}
+migrate();
 
 /* ============ UI primitives ============ */
 function toast(msg){
@@ -298,13 +344,13 @@ async function copyText(text, okMsg){
 }
 function csvCell(v){ const s = String(v ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function workoutsToCSV(list){
-  const rows = [["Date","Start Time","Workout","Session #","Status","Exercise","Set","Weight (" + UNIT + ")","Reps","Exercise Notes","Workout Notes"]];
+  const rows = [["Date","Start Time","Routine","Workout","Session #","Status","Exercise","Set","Weight (" + UNIT + ")","Reps","Exercise Notes","Workout Notes"]];
   list.slice().sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(w => {
-    const n = sessionNumber(w);
+    const n = sessionNumber(w), rn = routineName(w.routineId);
     w.exercises.forEach(ex => {
       const sets = performedSets(ex);
-      if (!sets.length) rows.push([isoDay(w.date), fmtTime(w.date), w.name, n, w.status === "done" ? "Completed" : "In progress", ex.name, "", "", "", ex.notes, w.notes]);
-      sets.forEach((s, i) => rows.push([isoDay(w.date), fmtTime(w.date), w.name, n, w.status === "done" ? "Completed" : "In progress",
+      if (!sets.length) rows.push([isoDay(w.date), fmtTime(w.date), rn, w.name, n, w.status === "done" ? "Completed" : "In progress", ex.name, "", "", "", ex.notes, w.notes]);
+      sets.forEach((s, i) => rows.push([isoDay(w.date), fmtTime(w.date), rn, w.name, n, w.status === "done" ? "Completed" : "In progress",
         ex.name, i + 1, s.weight, s.reps, i === 0 ? ex.notes : "", i === 0 ? w.notes : ""]));
     });
   });
@@ -312,6 +358,7 @@ function workoutsToCSV(list){
 }
 function workoutToText(w){
   const lines = [`${w.name} — Session #${sessionNumber(w)}`, fmtDateLong(w.date)];
+  if (w.routineId) lines.push(routineName(w.routineId));
   w.exercises.forEach(ex => {
     const sets = performedSets(ex);
     lines.push("", ex.name);
@@ -325,7 +372,7 @@ function workoutToText(w){
 function safeName(s){ return String(s || "workout").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "workout"; }
 async function backupAll(){
   const ok = await shareOrDownload(`LiftLog-backup-${isoDay(new Date())}.json`,
-    JSON.stringify({app:"liftlog", kind:"backup", version:1, exportedAt:new Date().toISOString(), templates:db.templates, workouts:db.workouts}, null, 1), "application/json");
+    JSON.stringify({app:"liftlog", kind:"backup", version:1, exportedAt:new Date().toISOString(), routines:db.routines, templates:db.templates, workouts:db.workouts}, null, 1), "application/json");
   if (ok) { db.settings.lastBackup = new Date().toISOString(); saveNow(); }
   return ok;
 }
@@ -333,11 +380,14 @@ async function backupAll(){
 /* ============ Template transfer (Mac → iPhone) ============ */
 function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
 function b64decode(b){ return decodeURIComponent(escape(atob(b))); }
-function templateCode(tpls){
-  const payload = {app:"liftlog", kind:"templates", version:1, templates: tpls.map(t => ({id:t.id, name:t.name, exercises:t.exercises.map(e => ({name:e.name, sets:e.sets, target:e.target||"", note:e.note||""}))}))};
+/** A transfer code carries a routine and its workout days. */
+function transferCode(routine, tpls){
+  const payload = {app:"liftlog", kind:"templates", version:2,
+    routine: routine ? {id: routine.id, name: routine.name, created: routine.created} : null,
+    templates: tpls.map(t => ({id:t.id, name:t.name, order:t.order, exercises:t.exercises.map(e => ({name:e.name, sets:e.sets, target:e.target||"", note:e.note||""}))}))};
   return "LIFTLOG1:" + b64encode(JSON.stringify(payload));
 }
-/** Accepts a LIFTLOG1: code, raw JSON (templates export or full backup). Returns {templates, workouts}. */
+/** Accepts a LIFTLOG1: code, raw JSON (routine export or full backup). Returns {routine, templates, workouts, routines}. */
 function parseImport(text){
   text = String(text || "").trim();
   if (!text) throw new Error("Nothing to import.");
@@ -346,26 +396,42 @@ function parseImport(text){
   if (m) obj = JSON.parse(b64decode(m[1].replace(/\s+/g, "")));
   else obj = JSON.parse(text);
   if (!obj || obj.app !== "liftlog") throw new Error("That doesn't look like a Lift Log file or code.");
-  const templates = (obj.templates || []).filter(t => t && t.name && Array.isArray(t.exercises)).map(t => ({
-    id: t.id || uid(), name: String(t.name), updated: new Date().toISOString(),
+  const routine = obj.routine && obj.routine.name
+    ? {id: obj.routine.id || uid(), name: String(obj.routine.name), created: obj.routine.created || new Date().toISOString()} : null;
+  const templates = (obj.templates || []).filter(t => t && t.name && Array.isArray(t.exercises)).map((t, i) => ({
+    id: t.id || uid(), name: String(t.name), order: t.order == null ? i : t.order,
+    routineId: routine ? routine.id : t.routineId, updated: new Date().toISOString(),
     exercises: t.exercises.map(e => ({id: uid(), name: String(e.name || ""), sets: Math.max(1, Math.min(20, parseInt(e.sets) || 3)), target: String(e.target || ""), note: String(e.note || "")}))
   }));
-  const workouts = obj.kind === "backup" ? (obj.workouts || []).filter(w => w && w.id && Array.isArray(w.exercises)) : [];
-  return {templates, workouts};
+  const isBackup = obj.kind === "backup";
+  return {routine, templates,
+    routines: isBackup ? (obj.routines || []).filter(r => r && r.id && r.name) : [],
+    workouts: isBackup ? (obj.workouts || []).filter(w => w && w.id && Array.isArray(w.exercises)) : []};
 }
-function applyImport({templates, workouts}){
+function applyImport({routine, templates, workouts, routines}){
+  const parts = [];
+  (routines || []).forEach(r => { if (!db.routines.some(x => x.id === r.id)) db.routines.push(r); });
+  let madeCurrent = false;
+  if (routine) {
+    const i = db.routines.findIndex(r => r.id === routine.id);
+    if (i >= 0) db.routines[i] = {...db.routines[i], name: routine.name};
+    else { db.routines.push(routine); madeCurrent = true; }
+    db.settings.currentRoutineId = routine.id;
+  }
+  const fallback = (currentRoutine() || {}).id || null;
   let added = 0, updated = 0, wk = 0;
   templates.forEach(t => {
+    if (!t.routineId || !routineById(t.routineId)) t.routineId = fallback;
     const i = db.templates.findIndex(x => x.id === t.id);
     if (i >= 0) { db.templates[i] = {...db.templates[i], ...t}; updated++; } else { db.templates.push(t); added++; }
   });
-  workouts.forEach(w => { if (!db.workouts.some(x => x.id === w.id)) { db.workouts.push(w); wk++; } });
+  (workouts || []).forEach(w => { if (!db.workouts.some(x => x.id === w.id)) { db.workouts.push(w); wk++; } });
   saveNow();
-  const parts = [];
-  if (added) parts.push(`${added} template${added>1?"s":""} added`);
-  if (updated) parts.push(`${updated} template${updated>1?"s":""} updated`);
-  if (wk) parts.push(`${wk} workout${wk>1?"s":""} restored`);
-  return parts.join(", ") || "Nothing new to import";
+  if (routine) parts.push(madeCurrent ? `“${routine.name}” is now your current routine` : `Updated “${routine.name}”`);
+  if (added) parts.push(`${added} workout day${added > 1 ? "s" : ""} added`);
+  if (updated) parts.push(`${updated} day${updated > 1 ? "s" : ""} updated`);
+  if (wk) parts.push(`${wk} workout${wk > 1 ? "s" : ""} restored`);
+  return parts.join(" · ") || "Nothing new to import";
 }
 /** Quick-add parser: "Bench Press 4x8-10" / "Rows, 3 x 12" / "Plank" */
 function parseQuickLines(text){
@@ -385,50 +451,56 @@ let tickTimer = null;
 const ICONS = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>',
   history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
-  templates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  routines: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>'
 };
-const TABS = [["home","Workout"],["history","History"],["templates","Templates"],["more","Export"]];
+const TABS = [["home","Workout"],["history","History"],["routines","Routines"],["more","Export"]];
+const TAB_OF = {home:"home", history:"history", detail:"history", routines:"routines", routine:"routines", more:"more"};
 function go(v){ saveNow(); view = v; render(); window.scrollTo(0, 0); }
 function render(){
   clearInterval(tickTimer); tickTimer = null;
   const app = $("#app");
   const fn = VIEWS[view.name] || VIEWS.home;
   app.innerHTML = fn();
-  const tabView = {home:1, history:1, templates:1, more:1, detail:1}[view.name];
-  const activeTab = view.name === "detail" ? "history" : view.name;
   const tabs = $("#tabs");
-  tabs.classList.toggle("hidden", !tabView);
+  const activeTab = TAB_OF[view.name];
+  tabs.classList.toggle("hidden", !activeTab);
   tabs.innerHTML = `<div class="in">${TABS.map(([k, l]) => `<button class="tab ${activeTab === k ? "on" : ""}" data-go="${k}">${ICONS[k]}<span>${l}</span></button>`).join("")}</div>`;
   if (AFTER[view.name]) AFTER[view.name]();
 }
 const VIEWS = {}, AFTER = {};
 
-/* ============ Home ============ */
+/* ============ Workout tab (home) ============ */
+function dayRow(t, act){
+  const n = timesDone(t), last = lastDoneFor(t);
+  return `<button class="row" data-act="${act}" data-id="${t.id}"><div class="grow"><div class="title">${esc(t.name)}</div>
+    <div class="meta">${t.exercises.length} exercise${t.exercises.length === 1 ? "" : "s"} · ${n ? `Done ${n}×` : "Not done yet"}${last ? " · last " + fmtDate(last.date, {month:"short", day:"numeric"}) : ""}</div></div>
+    <span class="chev">›</span></button>`;
+}
 VIEWS.home = () => {
+  const r = currentRoutine();
   const live = inProgress();
-  const tpls = db.templates.slice().sort((a, b) => {
-    const la = lastDoneFor(a), lb = lastDoneFor(b);
-    return (lb ? +new Date(lb.date) : 0) - (la ? +new Date(la.date) : 0) || a.name.localeCompare(b.name);
-  });
   const needBackup = db.workouts.some(w => w.status === "done") &&
     (!db.settings.lastBackup || Date.now() - new Date(db.settings.lastBackup) > 14 * 86400000);
-  let h = `<div class="top"><h1>Workout</h1></div>`;
+  let h = `<div class="top"><div class="grow"><h1>Workout</h1>${r ? `<div class="sub">${esc(r.name)} · Week ${weekOf(r)}</div>` : ""}</div>
+    ${db.routines.length > 1 ? `<button class="iconbtn" data-act="switchroutine">Switch</button>` : ""}</div>`;
   if (live) h += `<button class="banner" data-act="resume"><div class="grow"><b>Resume ${esc(live.name)}</b>
       <span>Started ${fmtTime(live.date)} · ${totalSets(live)} set${totalSets(live) === 1 ? "" : "s"} logged</span></div><span style="font-size:22px">›</span></button>`;
   if (needBackup) h += `<button class="banner soft" data-act="backup"><div class="grow"><b>Back up your workouts</b>
       <span class="small muted">${db.settings.lastBackup ? "Last backup " + daysAgo(db.settings.lastBackup) : "No backup yet"} — tap to save a copy to Files</span></div></button>`;
-  if (!tpls.length) {
-    h += `<div class="card"><div class="empty"><b>No workout templates yet</b>Create one here, or build it on your Mac and bring it over.</div>
-      <div class="pad" style="padding-top:0"><div class="btns"><button class="btn" data-act="newtpl">Create a template</button>
+  if (!r) {
+    h += `<div class="card"><div class="empty"><b>No routine yet</b>A routine is your training block — it holds the workout days you repeat for the next 8–12 weeks.</div>
+      <div class="pad" style="padding-top:0"><div class="btns"><button class="btn" data-act="newroutine">Create a routine</button>
       <button class="btn secondary" data-act="import">Import from Mac</button></div></div></div>`;
   } else {
-    h += `<div class="section-title">Start a workout</div><div class="card">` + tpls.map(t => {
-      const n = timesDone(t), last = lastDoneFor(t);
-      return `<button class="row" data-act="start" data-id="${t.id}"><div class="grow"><div class="title">${esc(t.name)}</div>
-        <div class="meta">${t.exercises.length} exercise${t.exercises.length === 1 ? "" : "s"} · ${n ? `Done ${n}×` : "Not done yet"}${last ? " · last " + fmtDate(last.date, {month:"short", day:"numeric"}) : ""}</div></div>
-        <span class="chev">›</span></button>`;
-    }).join("") + `</div>`;
+    const days = daysOf(r.id);
+    if (!days.length) {
+      h += `<div class="card"><div class="empty"><b>No workout days yet</b>Add the days of ${esc(r.name)} — Day 1 Chest &amp; Arms, Day 2 Legs, and so on.</div>
+        <div class="pad" style="padding-top:0"><div class="btns"><button class="btn" data-act="newday">Add a workout day</button>
+        <button class="btn secondary" data-act="import">Import from Mac</button></div></div></div>`;
+    } else {
+      h += `<div class="section-title">Start a workout</div><div class="card">${days.map(t => dayRow(t, "start")).join("")}</div>`;
+    }
   }
   h += `<div class="btns"><button class="btn ghost" data-act="empty">+ Start an empty workout</button></div>`;
   const recent = sortedWorkouts().filter(w => w.status === "done").slice(0, 3);
@@ -452,19 +524,27 @@ async function startWorkout(tpl){
 
 /* ============ History ============ */
 function historyRow(w){
-  const n = sessionNumber(w), sets = totalSets(w);
+  const sets = totalSets(w);
   return `<button class="row" data-act="detail" data-id="${w.id}"><div class="grow">
     <div class="title">${esc(w.name)} ${w.status !== "done" ? '<span class="pill live">In progress</span>' : ""}</div>
-    <div class="meta">${fmtDate(w.date)} · #${n} · ${w.exercises.length} exercise${w.exercises.length === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"}</div></div>
+    <div class="meta">${fmtDate(w.date)} · #${sessionNumber(w)} · ${w.exercises.length} exercise${w.exercises.length === 1 ? "" : "s"} · ${sets} set${sets === 1 ? "" : "s"}</div></div>
     <span class="chev">›</span></button>`;
 }
 VIEWS.history = () => {
   const list = sortedWorkouts();
   let h = `<div class="top"><h1>History</h1>${list.length ? `<button class="iconbtn" data-act="exportall">Export</button>` : ""}</div>`;
   if (!list.length) return h + `<div class="card"><div class="empty"><b>No workouts yet</b>Finished and in-progress workouts show up here.</div></div>`;
-  const byMonth = {};
-  list.forEach(w => { const k = new Date(w.date).toLocaleDateString(undefined, {month: "long", year: "numeric"}); (byMonth[k] = byMonth[k] || []).push(w); });
-  Object.entries(byMonth).forEach(([m, ws]) => { h += `<div class="section-title">${esc(m)}</div><div class="card">${ws.map(historyRow).join("")}</div>`; });
+  const groups = [];
+  list.forEach(w => {
+    const key = (w.routineId || "none") + "|" + new Date(w.date).toLocaleDateString(undefined, {month: "long", year: "numeric"});
+    let g = groups.find(x => x.key === key);
+    if (!g) { g = {key, routineId: w.routineId, month: new Date(w.date).toLocaleDateString(undefined, {month: "long", year: "numeric"}), items: []}; groups.push(g); }
+    g.items.push(w);
+  });
+  groups.forEach(g => {
+    const rn = routineName(g.routineId);
+    h += `<div class="section-title">${esc(g.month)}${rn ? " · " + esc(rn) : ""}</div><div class="card">${g.items.map(historyRow).join("")}</div>`;
+  });
   return h;
 };
 
@@ -472,11 +552,12 @@ VIEWS.detail = () => {
   const w = db.workouts.find(x => x.id === view.id);
   if (!w) { view = {name: "history"}; return VIEWS.history(); }
   const dur = w.finishedAt ? fmtDur(new Date(w.finishedAt) - new Date(w.date)) : null;
+  const rn = routineName(w.routineId);
   let h = `<div class="top"><button class="iconbtn" data-go="history">‹ History</button><div style="flex:1"></div>
     <button class="iconbtn" data-act="editwk" data-id="${w.id}">${w.status === "done" ? "Edit" : "Resume"}</button></div>
     <h1 style="font-size:26px;margin:0 0 4px;letter-spacing:-.02em">${esc(w.name)}</h1>
     <div class="sub">${fmtDateLong(w.date)} · ${fmtTime(w.date)}</div>
-    <div class="sub" style="margin-bottom:14px">Session #${sessionNumber(w)} · ${totalSets(w)} sets${dur ? " · " + dur : ""}${volume(w) ? ` · ${Math.round(volume(w)).toLocaleString()} ${UNIT} volume` : ""}</div>`;
+    <div class="sub" style="margin-bottom:14px">${rn ? esc(rn) + " · " : ""}Session #${sessionNumber(w)} · ${totalSets(w)} sets${dur ? " · " + dur : ""}${volume(w) ? ` · ${Math.round(volume(w)).toLocaleString()} ${UNIT} volume` : ""}</div>`;
   w.exercises.forEach(ex => {
     const sets = performedSets(ex);
     h += `<div class="card pad"><div style="font-weight:750;font-size:17px">${esc(ex.name)}</div>
@@ -491,26 +572,70 @@ VIEWS.detail = () => {
   return h;
 };
 
-/* ============ Templates ============ */
-VIEWS.templates = () => {
-  let h = `<div class="top"><h1>Templates</h1><button class="iconbtn" data-act="newtpl">+ New</button></div>`;
-  if (!db.templates.length) h += `<div class="card"><div class="empty"><b>No templates yet</b>A template is a workout plan you reuse: its name and exercises.</div></div>`;
-  else h += `<div class="card">${db.templates.slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => `<button class="row" data-act="edittpl" data-id="${t.id}">
-      <div class="grow"><div class="title">${esc(t.name)}</div><div class="meta">${esc(t.exercises.map(e => e.name).filter(Boolean).join(" · ") || "No exercises")}</div></div><span class="chev">›</span></button>`).join("")}</div>`;
-  h += `<div class="section-title">Move templates between Mac and iPhone</div>
-    <div class="card pad"><div class="small muted" style="margin-bottom:10px">On the Mac: open a template and tap <b>Send to iPhone</b>. On the iPhone: tap <b>Import</b> below and paste, or pick the file.</div>
-    <div class="btns" style="margin:0"><button class="btn secondary" data-act="import">Import template</button></div></div>`;
+/* ============ Routines tab ============ */
+function dayEditRow(t, i, n){
+  return `<div class="row"><div class="tools"><button class="tool" data-act="dayup" data-id="${t.id}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button>
+    <button class="tool" data-act="daydown" data-id="${t.id}" aria-label="Move down"${i === n - 1 ? " disabled" : ""}>↓</button></div>
+    <button class="grow" data-act="editday" data-id="${t.id}" style="background:none;border:0;text-align:left;padding:0;min-height:44px">
+    <div class="title">${esc(t.name)}</div><div class="meta">${esc(t.exercises.map(e => e.name).filter(Boolean).join(" · ") || "No exercises")}</div></button>
+    <span class="chev">›</span></div>`;
+}
+VIEWS.routines = () => {
+  const r = currentRoutine();
+  let h = `<div class="top"><h1>Routines</h1><button class="iconbtn" data-act="newroutine">+ New</button></div>`;
+  if (!r) {
+    h += `<div class="card"><div class="empty"><b>No routine yet</b>Create your 8–12 week routine, then add the workout days inside it.</div>
+      <div class="pad" style="padding-top:0"><div class="btns"><button class="btn" data-act="newroutine">Create a routine</button></div></div></div>`;
+    return h;
+  }
+  const days = daysOf(r.id);
+  h += `<div class="card pad"><div class="row" style="padding:0;min-height:0">
+      <div class="grow"><div style="font-size:20px;font-weight:750;letter-spacing:-.01em">${esc(r.name)}</div>
+      <div class="meta">Current routine · Week ${weekOf(r)} · started ${fmtDate(r.created, {month:"short", day:"numeric", year:"numeric"})}</div></div>
+      <button class="tool" data-act="routinemenu" data-id="${r.id}" aria-label="Routine options">•••</button></div></div>
+    <div class="section-title">Workout days</div>`;
+  h += days.length ? `<div class="card">${days.map((t, i) => dayEditRow(t, i, days.length)).join("")}</div>`
+    : `<div class="card"><div class="empty" style="padding:20px">No workout days yet — add Day 1 below.</div></div>`;
+  h += `<div class="btns"><button class="btn secondary" data-act="newday">+ Add workout day</button>
+    <button class="btn secondary" data-act="sendroutine" data-id="${r.id}">Send routine to iPhone</button></div>`;
+  const past = otherRoutines();
+  if (past.length) h += `<div class="section-title">Past routines</div><div class="card">${past.map(p => {
+    const n = daysOf(p.id).length, done = db.workouts.filter(w => w.routineId === p.id && w.status === "done").length;
+    return `<button class="row" data-act="openroutine" data-id="${p.id}"><div class="grow"><div class="title">${esc(p.name)}</div>
+      <div class="meta">${fmtDate(p.created, {month:"short", day:"numeric", year:"numeric"})} · ${n} day${n === 1 ? "" : "s"} · ${done} workout${done === 1 ? "" : "s"} logged</div></div>
+      <span class="chev">›</span></button>`;
+  }).join("")}</div>`;
+  h += `<div class="card pad small muted">A routine holds the workout days you repeat for a training block. Each day counts its own sessions inside the routine, so the count starts again when you begin a new one.</div>`;
   return h;
 };
 
+VIEWS.routine = () => {
+  const r = routineById(view.id);
+  if (!r) { view = {name: "routines"}; return VIEWS.routines(); }
+  const days = daysOf(r.id), done = db.workouts.filter(w => w.routineId === r.id && w.status === "done").length;
+  let h = `<div class="top"><button class="iconbtn" data-go="routines">‹ Routines</button><div style="flex:1"></div>
+      <button class="tool" data-act="routinemenu" data-id="${r.id}" aria-label="Routine options">•••</button></div>
+    <h1 style="font-size:26px;margin:0 0 4px;letter-spacing:-.02em">${esc(r.name)}</h1>
+    <div class="sub" style="margin-bottom:14px">Started ${fmtDate(r.created, {month:"long", day:"numeric", year:"numeric"})} · ${done} workout${done === 1 ? "" : "s"} logged</div>`;
+  h += days.length ? `<div class="card">${days.map(t => dayRow(t, "editday")).join("")}</div>`
+    : `<div class="card"><div class="empty" style="padding:20px">No workout days in this routine.</div></div>`;
+  h += `<div class="btns"><button class="btn" data-act="makecurrent" data-id="${r.id}">Make this my current routine</button>
+    <button class="btn secondary" data-act="sendroutine" data-id="${r.id}">Send to iPhone</button>
+    <button class="btn danger" data-act="delroutine" data-id="${r.id}">Delete routine</button></div>`;
+  return h;
+};
+
+/* ============ Workout day editor ============ */
 let tplDraft = null;
 VIEWS.tpledit = () => {
   const t = tplDraft;
   const isNew = !db.templates.some(x => x.id === t.id);
-  let h = `<div class="top"><button class="iconbtn" data-act="tplcancel">Cancel</button><h1 class="sm" style="text-align:center">${isNew ? "New template" : "Edit template"}</h1>
+  const rn = routineName(t.routineId);
+  let h = `<div class="top"><button class="iconbtn" data-act="tplcancel">Cancel</button><h1 class="sm" style="text-align:center">${isNew ? "New workout day" : "Edit workout day"}</h1>
     <button class="iconbtn" data-act="tplsave" style="font-weight:800">Save</button></div>
+    ${rn ? `<div class="sub" style="text-align:center;margin:-4px 0 6px">in ${esc(rn)}</div>` : ""}
     <label class="f" for="tplname">Workout name</label>
-    <input id="tplname" class="input" placeholder="e.g. Push Day A" value="${esc(t.name)}" autocomplete="off" enterkeyhint="done">
+    <input id="tplname" class="input" placeholder="e.g. Day 1 — Chest &amp; Arms" value="${esc(t.name)}" autocomplete="off" enterkeyhint="done">
     <label class="f">Exercises</label><div class="card" id="exlist">`;
   if (!t.exercises.length) h += `<div class="empty" style="padding:18px">No exercises yet — add them below.</div>`;
   t.exercises.forEach((e, i) => {
@@ -523,9 +648,8 @@ VIEWS.tpledit = () => {
   });
   h += `</div><div class="btns two"><button class="btn secondary" data-act="exadd">+ Add exercise</button><button class="btn secondary" data-act="exbulk">Paste a list</button></div>`;
   if (!isNew) h += `<div class="section-title">Other</div><div class="btns">
-      <button class="btn secondary" data-act="tplsend">Send to iPhone</button>
       <button class="btn secondary" data-act="tplstart">Start this workout</button>
-      <button class="btn danger" data-act="tpldel">Delete template</button></div>`;
+      <button class="btn danger" data-act="tpldel">Delete workout day</button></div>`;
   return h;
 };
 AFTER.tpledit = () => {
@@ -596,7 +720,7 @@ VIEWS.workout = () => {
       <div style="flex:1"></div>
       ${live ? `<button class="btn small" data-act="finish">Finish</button>` : `<button class="btn small" data-act="wkdone">Save</button>`}</div>
     <h1 style="font-size:24px;margin:2px 0 2px;letter-spacing:-.02em" data-act="renamewk">${esc(w.name)}</h1>
-    <div class="stats"><span>${fmtDate(w.date)}</span><span>Session <b>#${sessionNumber(w)}</b></span>
+    <div class="stats">${w.routineId && routineName(w.routineId) ? `<span>${esc(routineName(w.routineId))}</span>` : ""}<span>${fmtDate(w.date)}</span><span>Session <b>#${sessionNumber(w)}</b></span>
       ${live ? `<span>⏱ <b id="elapsed">${fmtDur(Date.now() - new Date(w.date))}</b></span>` : ""}<span><b id="setcount">${totalSets(w)}</b> sets</span></div></div>
     <div style="height:12px"></div>`;
   if (!w.exercises.length) h += `<div class="card"><div class="empty"><b>No exercises yet</b>Add your first exercise below.</div></div>`;
@@ -680,6 +804,7 @@ document.addEventListener("keydown", e => {
 VIEWS.more = () => {
   const done = db.workouts.filter(w => w.status === "done").length;
   const standalone = window.navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  const r = currentRoutine();
   return `<div class="top"><h1>Export</h1></div>
   <div class="section-title">Your workouts</div>
   <div class="card">
@@ -687,14 +812,14 @@ VIEWS.more = () => {
     <button class="row" data-act="backup"><div class="grow"><div class="title">Back up everything</div><div class="meta">${db.settings.lastBackup ? "Last backup " + daysAgo(db.settings.lastBackup) : "No backup yet"} · save to Files, iCloud Drive or OneDrive</div></div><span class="chev">›</span></button>
     <button class="row" data-act="restore"><div class="grow"><div class="title">Restore from a backup</div><div class="meta">Adds anything missing from a backup file</div></div><span class="chev">›</span></button>
   </div>
-  <div class="section-title">Templates</div>
+  <div class="section-title">Routines</div>
   <div class="card">
-    <button class="row" data-act="sendall"><div class="grow"><div class="title">Send all templates to iPhone</div><div class="meta">Copy a code or save a file</div></div><span class="chev">›</span></button>
-    <button class="row" data-act="import"><div class="grow"><div class="title">Import templates</div><div class="meta">Paste a code or choose a file</div></div><span class="chev">›</span></button>
+    <button class="row" data-act="sendroutine" data-id="${r ? r.id : ""}"><div class="grow"><div class="title">Send a routine to iPhone</div><div class="meta">${r ? esc(r.name) + " and its workout days" : "No routine yet"}</div></div><span class="chev">›</span></button>
+    <button class="row" data-act="import"><div class="grow"><div class="title">Import a routine</div><div class="meta">Paste a code or choose a file</div></div><span class="chev">›</span></button>
   </div>
   <div class="section-title">About</div>
   <div class="card pad small muted">
-    ${db.templates.length} template${db.templates.length === 1 ? "" : "s"} · ${done} completed workout${done === 1 ? "" : "s"} · weights in ${UNIT}<br>
+    ${db.routines.length} routine${db.routines.length === 1 ? "" : "s"} · ${done} completed workout${done === 1 ? "" : "s"} · weights in ${UNIT}<br>
     Everything is stored on this device only${standalone ? "" : ". Tip: on iPhone, use Share › Add to Home Screen and always open Lift Log from its icon — Safari and the Home Screen app keep separate data"}.
     Back up now and then so a lost phone doesn't mean lost workouts.
   </div>`;
@@ -703,7 +828,7 @@ VIEWS.more = () => {
 /* ============ Import / send sheets ============ */
 function importSheet(){
   const scrim = document.createElement("div"); scrim.className = "scrim";
-  scrim.innerHTML = `<div class="sheet"><h2>Import templates</h2>
+  scrim.innerHTML = `<div class="sheet"><h2>Import a routine</h2>
     <p>Paste the code you copied on your Mac, or choose a Lift Log file you AirDropped or saved to Files.</p>
     <textarea class="input codebox" id="importtext" rows="4" placeholder="Paste code here (starts with LIFTLOG1:)"></textarea>
     <div class="btns two"><button class="btn secondary" data-x="paste">Paste</button><button class="btn secondary" data-x="file">Choose file</button></div>
@@ -712,9 +837,11 @@ function importSheet(){
   const ta = scrim.querySelector("#importtext");
   const close = () => scrim.remove();
   const run = text => {
-    try { const res = parseImport(text); if (!res.templates.length && !res.workouts.length) throw new Error("No templates found in that code.");
-      const msg = applyImport(res); close(); toast(msg); render(); }
-    catch(err) { toast(err.message && err.message.length < 80 ? err.message : "That code couldn't be read — copy it again and retry."); }
+    try {
+      const res = parseImport(text);
+      if (!res.templates.length && !res.workouts.length && !res.routine) throw new Error("No routine found in that code.");
+      const msg = applyImport(res); close(); toast(msg); render();
+    } catch(err) { toast(err.message && err.message.length < 80 ? err.message : "That code couldn't be read — copy it again and retry."); }
   };
   scrim.addEventListener("click", async e => {
     if (e.target === scrim) return close();
@@ -734,33 +861,109 @@ function pickFile(cb){
   fp.onchange = () => { const f = fp.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => cb(String(r.result)); r.readAsText(f); };
   fp.click();
 }
-async function sendTemplates(tpls){
-  if (!tpls.length) return toast("No templates to send");
-  const code = templateCode(tpls);
-  const label = tpls.length === 1 ? tpls[0].name : "templates";
-  const r = await sheet({title: `Send ${tpls.length === 1 ? "“" + tpls[0].name + "”" : "all templates"} to iPhone`,
-    html: `<p><b>Copy code</b> — then on your iPhone open Lift Log › Templates › Import › Paste. (Works when your Mac and iPhone share an Apple ID with Handoff on.)</p>
+async function sendRoutine(routine){
+  if (!routine) return toast("No routine to send");
+  const tpls = daysOf(routine.id).map(cleanTemplate);
+  if (!tpls.length) return toast("Add a workout day first");
+  const code = transferCode(routine, tpls);
+  const r = await sheet({title: `Send “${routine.name}” to iPhone`,
+    html: `<p>${tpls.length} workout day${tpls.length === 1 ? "" : "s"} will go across.</p>
+      <p><b>Copy code</b> — then on your iPhone open Lift Log › Routines › ••• › Import, and Paste. (Works when your Mac and iPhone share an Apple ID with Handoff on.)</p>
       <p><b>Save file</b> — AirDrop it or save to iCloud Drive, then choose it from Import › Choose file.</p>`,
     buttons: [{label: "Copy code", value: "copy"}, {label: "Save file", cls: "secondary", value: "file"}, {label: "Cancel", cls: "ghost", value: null}]});
   if (r === "copy") copyText(code, "Code copied — paste it on your iPhone");
-  if (r === "file") shareOrDownload(`LiftLog-${safeName(label)}.json`, JSON.stringify(JSON.parse(b64decode(code.slice(9))), null, 1), "application/json");
+  if (r === "file") shareOrDownload(`LiftLog-${safeName(routine.name)}.json`, JSON.stringify(JSON.parse(b64decode(code.slice(9))), null, 1), "application/json");
 }
 
 /* ============ Actions ============ */
+let tplReturn = {name: "routines"};
+function editDay(t, from){ tplDraft = clone(t); tplReturn = from || {name: "routines"}; go({name: "tpledit"}); }
+function reorderDay(id, dir){
+  const t = db.templates.find(x => x.id === id); if (!t) return;
+  const days = daysOf(t.routineId), i = days.findIndex(x => x.id === id), j = i + dir;
+  if (j < 0 || j >= days.length) return;
+  [days[i], days[j]] = [days[j], days[i]];
+  days.forEach((d, k) => { d.order = k; });
+  saveNow(); render();
+}
+
 const ACTIONS = {
   resume: () => { const w = inProgress(); if (w) go({name: "workout", id: w.id}); },
   backup: () => backupAll().then(() => render()),
   start: el => startWorkout(db.templates.find(t => t.id === el.dataset.id)),
   empty: () => startWorkout(null),
-  newtpl: () => { tplDraft = {id: uid(), name: "", exercises: [{id: uid(), name: "", sets: 3, target: "", note: ""}]}; go({name: "tpledit"}); $("#tplname").focus(); },
-  edittpl: el => { tplDraft = clone(db.templates.find(t => t.id === el.dataset.id)); go({name: "tpledit"}); },
-  tplcancel: () => go({name: "templates"}),
+
+  // routines
+  newroutine: async () => {
+    const cur = currentRoutine();
+    const name = await promptText("New routine", "", "e.g. Fall Block — Push/Pull/Legs", "Next");
+    if (!name) return;
+    let copyFrom = null;
+    if (cur && daysOf(cur.id).length) {
+      const r = await sheet({title: name, text: `Start with a copy of the workout days in “${cur.name}”, or start empty?`,
+        buttons: [{label: `Copy days from ${cur.name}`, value: "copy"}, {label: "Start empty", cls: "secondary", value: "empty"}, {label: "Cancel", cls: "ghost", value: null}]});
+      if (!r) return;
+      if (r === "copy") copyFrom = cur.id;
+    }
+    newRoutine(name, copyFrom);
+    go({name: "routines"});
+    toast(`“${name}” is now your current routine`);
+  },
+  switchroutine: async () => {
+    const cur = currentRoutine();
+    const list = db.routines.slice().sort((a, b) => new Date(b.created) - new Date(a.created));
+    const r = await sheet({title: "Current routine", text: "Workouts you start are counted inside the current routine.",
+      buttons: list.map(x => ({label: x.name + (cur && x.id === cur.id ? "  ✓" : ""), cls: cur && x.id === cur.id ? "" : "secondary", value: x.id}))
+        .concat([{label: "Cancel", cls: "ghost", value: null}])});
+    if (!r) return;
+    db.settings.currentRoutineId = r; saveNow(); render(); toast(`Now on “${routineName(r)}”`);
+  },
+  openroutine: el => go({name: "routine", id: el.dataset.id}),
+  makecurrent: el => { db.settings.currentRoutineId = el.dataset.id; saveNow(); go({name: "routines"}); toast(`Now on “${routineName(el.dataset.id)}”`); },
+  routinemenu: async el => {
+    const r = routineById(el.dataset.id); if (!r) return;
+    const cur = currentRoutine();
+    const isCur = cur && cur.id === r.id;
+    const a = await sheet({title: r.name, buttons: [
+      {label: "Rename", cls: "secondary", value: "rename"},
+      ...(isCur ? [] : [{label: "Make this my current routine", cls: "secondary", value: "current"}]),
+      {label: "Send to iPhone", cls: "secondary", value: "send"},
+      {label: "Delete routine", cls: "danger", value: "del"},
+      {label: "Cancel", cls: "ghost", value: null}]});
+    if (a === "rename") { const n = await promptText("Rename routine", r.name, "Routine name", "Save"); if (n) { r.name = n; saveNow(); render(); } }
+    else if (a === "current") { db.settings.currentRoutineId = r.id; saveNow(); go({name: "routines"}); toast(`Now on “${r.name}”`); }
+    else if (a === "send") sendRoutine(r);
+    else if (a === "del") ACTIONS.delroutine(el);
+  },
+  delroutine: async el => {
+    const r = routineById(el.dataset.id); if (!r) return;
+    const logged = db.workouts.filter(w => w.routineId === r.id).length;
+    if (!await confirmSheet(`Delete “${r.name}”?`, `Its workout days will be removed.${logged ? ` The ${logged} workout${logged === 1 ? "" : "s"} you logged in it stay in your history.` : ""}`, "Delete routine", true)) return;
+    db.templates = db.templates.filter(t => t.routineId !== r.id);
+    db.routines = db.routines.filter(x => x.id !== r.id);
+    if (db.settings.currentRoutineId === r.id) db.settings.currentRoutineId = (db.routines[db.routines.length - 1] || {}).id || null;
+    saveNow(); go({name: "routines"});
+  },
+  sendroutine: el => sendRoutine(routineById(el.dataset.id) || currentRoutine()),
+  dayup: el => reorderDay(el.dataset.id, -1),
+  daydown: el => reorderDay(el.dataset.id, 1),
+
+  // workout days (templates)
+  newday: () => {
+    const r = currentRoutine();
+    if (!r) return ACTIONS.newroutine();
+    tplDraft = {id: uid(), routineId: r.id, order: daysOf(r.id).length, name: "", exercises: [{id: uid(), name: "", sets: 3, target: "", note: ""}]};
+    tplReturn = {name: view.name === "home" ? "home" : "routines"};
+    go({name: "tpledit"}); $("#tplname").focus();
+  },
+  editday: el => editDay(db.templates.find(t => t.id === el.dataset.id), view.name === "routine" ? {name: "routine", id: view.id} : {name: view.name}),
+  tplcancel: () => go(tplReturn),
   tplsave: () => {
     const t = cleanTemplate(tplDraft);
     if (!t.exercises.length) return toast("Add at least one exercise");
     const i = db.templates.findIndex(x => x.id === t.id);
     if (i >= 0) db.templates[i] = t; else db.templates.push(t);
-    saveNow(); go({name: "templates"}); toast("Template saved");
+    saveNow(); go(tplReturn); toast("Workout day saved");
   },
   exadd: () => addExercise(),
   exdel: el => { tplDraft.exercises.splice(+el.dataset.i, 1); render(); },
@@ -774,16 +977,18 @@ const ACTIONS = {
     const items = parseQuickLines(window.__sheetInputs[0]);
     tplDraft.exercises = tplDraft.exercises.filter(e => e.name.trim()).concat(items); render();
   },
-  tplsend: () => sendTemplates([cleanTemplate(tplDraft)]),
   tplstart: () => { const t = db.templates.find(x => x.id === tplDraft.id); if (t) startWorkout(t); },
   tpldel: async () => {
-    if (!await confirmSheet("Delete this template?", "Past workouts made from it stay in your history.", "Delete template", true)) return;
-    db.templates = db.templates.filter(t => t.id !== tplDraft.id); saveNow(); go({name: "templates"});
+    if (!await confirmSheet("Delete this workout day?", "Workouts you already logged from it stay in your history.", "Delete day", true)) return;
+    db.templates = db.templates.filter(t => t.id !== tplDraft.id); saveNow(); go(tplReturn);
   },
+
+  // import / export
   import: () => importSheet(),
-  sendall: () => sendTemplates(db.templates),
   exportall: () => db.workouts.length ? shareOrDownload(`LiftLog-workouts-${isoDay(new Date())}.csv`, workoutsToCSV(db.workouts), "text/csv") : toast("No workouts yet"),
-  restore: () => pickFile(text => { try { const res = parseImport(text); toast(applyImport(res)); render(); } catch(e) { toast(e.message || "Couldn't read that file"); } }),
+  restore: () => pickFile(text => { try { toast(applyImport(parseImport(text))); render(); } catch(e) { toast(e.message || "Couldn't read that file"); } }),
+
+  // history
   detail: el => go({name: "detail", id: el.dataset.id}),
   editwk: el => go({name: "workout", id: el.dataset.id}),
   sharetext: el => copyText(workoutToText(db.workouts.find(w => w.id === el.dataset.id)), "Copied — paste into Notes or Messages"),
@@ -792,6 +997,7 @@ const ACTIONS = {
     if (!await confirmSheet("Delete this workout?", "This can't be undone.", "Delete workout", true)) return;
     db.workouts = db.workouts.filter(w => w.id !== el.dataset.id); saveNow(); go({name: "history"});
   },
+
   // live workout
   wkback: () => go({name: "home"}),
   wkdone: () => { const w = curW(); go({name: "detail", id: w.id}); toast("Changes saved"); },
